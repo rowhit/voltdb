@@ -166,7 +166,7 @@ public class VoltDB {
         public String m_adminInterface = "";
 
         /** consistency level for reads */
-        public Consistency.ReadLevel m_consistencyReadLevel = Consistency.ReadLevel.SAFE_1;
+        public Consistency.ReadLevel m_consistencyReadLevel = Consistency.ReadLevel.SAFE_2;
 
         /** port number to use to build intra-cluster mesh */
         public int m_internalPort = org.voltcore.common.Constants.DEFAULT_INTERNAL_PORT;
@@ -868,7 +868,7 @@ public class VoltDB {
             }
             else {
                 // temporary change to safe-1 for testing
-                return Consistency.ReadLevel.SAFE_1;
+                return Consistency.ReadLevel.SAFE_2;
             }
         }
     }

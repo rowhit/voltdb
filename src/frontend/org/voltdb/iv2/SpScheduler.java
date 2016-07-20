@@ -522,31 +522,38 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
 
             //Don't replicate reads, this really assumes that DML validation
             //is going to be integrated soonish
-            if (m_isLeader && (!shortcutRead) && (m_sendToHSIds.length > 0)) {
-                Iv2InitiateTaskMessage replmsg =
-                    new Iv2InitiateTaskMessage(m_mailbox.getHSId(),
-                            m_mailbox.getHSId(),
-                            m_repairLogTruncationHandle,
-                            msg.getTxnId(),
-                            msg.getUniqueId(),
-                            msg.isReadOnly(),
-                            msg.isSinglePartition(),
-                            msg.getStoredProcedureInvocation(),
-                            msg.getClientInterfaceHandle(),
-                            msg.getConnectionId(),
-                            msg.isForReplay());
-                // Update the handle in the copy since the constructor doesn't set it
-                replmsg.setSpHandle(newSpHandle);
-                m_mailbox.send(m_sendToHSIds, replmsg);
 
-                DuplicateCounter counter = new DuplicateCounter(
-                        msg.getInitiatorHSId(),
-                        msg.getTxnId(),
-                        m_replicaHSIds,
-                        msg);
+                if (m_isLeader && (!shortcutRead) && (m_sendToHSIds.length > 0)) {
+                    if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2 && msg.isReadOnly()) {
+                        // OPTION 2 do want to replica the READS
 
-                safeAddToDuplicateCounterMap(new DuplicateCounterKey(msg.getTxnId(), newSpHandle), counter);
-            }
+                    } else {
+                        // FOR OPTION 2, reads
+                        Iv2InitiateTaskMessage replmsg =
+                            new Iv2InitiateTaskMessage(m_mailbox.getHSId(),
+                                    m_mailbox.getHSId(),
+                                    m_repairLogTruncationHandle,
+                                    msg.getTxnId(),
+                                    msg.getUniqueId(),
+                                    msg.isReadOnly(),
+                                    msg.isSinglePartition(),
+                                    msg.getStoredProcedureInvocation(),
+                                    msg.getClientInterfaceHandle(),
+                                    msg.getConnectionId(),
+                                    msg.isForReplay());
+                        // Update the handle in the copy since the constructor doesn't set it
+                        replmsg.setSpHandle(newSpHandle);
+                        m_mailbox.send(m_sendToHSIds, replmsg);
+
+                        DuplicateCounter counter = new DuplicateCounter(
+                                msg.getInitiatorHSId(),
+                                msg.getTxnId(),
+                                m_replicaHSIds,
+                                msg);
+
+                        safeAddToDuplicateCounterMap(new DuplicateCounterKey(msg.getTxnId(), newSpHandle), counter);
+                    }
+                }
         }
         else {
             setMaxSeenTxnId(msg.getSpHandle());
@@ -710,8 +717,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                 m_mailbox.send(message.getInitiatorHSId(), message);
                 return;
             }
-            if (m_shortCircuitReadLog != null) {
-                assert(m_defaultConsistencyReadLevel == ReadLevel.SAFE_1);
+            if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_1) {
                 m_shortCircuitReadLog.offerSp(message, m_isLeader, m_repairLogTruncationHandle);
                 return;
             }
@@ -735,6 +741,10 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             // the initiatorHSId is the ClientInterface mailbox. Yeah. I know.
             m_repairLogTruncationHandle = spHandle;
             m_mailbox.send(message.getInitiatorHSId(), message);
+        }
+
+        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2 && m_isLeader && message.isReadOnly()) {
+            m_shortCircuitReadLog.offerSp(message, m_isLeader, m_repairLogTruncationHandle);
         }
     }
 
@@ -1177,10 +1187,15 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
     }
 
     public void setShortCircuitRead(boolean isForTest) {
-        if (m_defaultConsistencyReadLevel != ReadLevel.SAFE_1) {
+        if (m_defaultConsistencyReadLevel != ReadLevel.SAFE_1 && m_defaultConsistencyReadLevel != ReadLevel.SAFE_2) {
             return;
         }
         m_shortCircuitReadLog = new ShortCircuitReadLog(m_mailbox);
+
+        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2) {
+            // do not construct the scheduler work
+            return;
+        }
 
         // TODO(xin): it's better not to create the scheduler work on replicas.
         VoltDB.instance().schedulePriorityWork(
