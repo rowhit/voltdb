@@ -743,7 +743,8 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             m_mailbox.send(message.getInitiatorHSId(), message);
         }
 
-        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2 && m_isLeader && message.isReadOnly()) {
+        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2 && m_isLeader && message.isReadOnly() &&
+                m_shortCircuitReadLog != null) {
             m_shortCircuitReadLog.offerSp(message, m_isLeader, m_repairLogTruncationHandle);
         }
     }
