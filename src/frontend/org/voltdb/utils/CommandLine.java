@@ -36,6 +36,7 @@ import org.voltdb.probe.MeshProber;
 
 import com.google_voltpatches.common.base.Joiner;
 import com.google_voltpatches.common.collect.ImmutableSortedSet;
+import java.io.IOException;
 
 
 // VoltDB.Configuration represents all of the VoltDB command line parameters.
@@ -66,7 +67,7 @@ public class CommandLine extends VoltDB.Configuration
     }
 
     // Copy ctor.
-    public CommandLine makeCopy() {
+    public CommandLine makeCopy() throws IOException {
         CommandLine cl = new CommandLine(m_startAction);
         // first copy the base class fields
         cl.m_ipcPort = m_ipcPort;
@@ -124,7 +125,7 @@ public class CommandLine extends VoltDB.Configuration
         cl.m_hostCount = m_hostCount;
         cl.m_enableAdd = m_enableAdd;
         cl.m_voltdbRoot = m_voltdbRoot;
-
+        cl.m_newCli = m_newCli;
         // deep copy the property map if it exists
         if (javaProperties != null) {
             cl.javaProperties = new TreeMap<String, String>();
@@ -1016,5 +1017,13 @@ public class CommandLine extends VoltDB.Configuration
             return sb.toString();
         }
     }
+
+    boolean m_newCli = false;
+    //Return true if we are going to run init and start.
+    boolean isNewCli() {
+        return m_newCli;
+    }
+
+    public void setNewCli(boolean flag) { m_newCli = flag; };
 
 }

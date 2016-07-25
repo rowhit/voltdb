@@ -247,11 +247,12 @@ public class VoltDB {
         public String m_placementGroup = null;
 
         public boolean m_isPaused = false;
+        public boolean ignoreCrashForInitialize = false;
 
         private final static void referToDocAndExit() {
             System.out.println("Please refer to VoltDB documentation for command line usage.");
             System.out.flush();
-            exit(-1);
+            System.exit(-1);
         }
 
         public Configuration() {
@@ -761,7 +762,7 @@ public class VoltDB {
                 hostLog.fatal(msg);
             }
             EnumSet<StartAction> requiresDeployment = EnumSet.complementOf(
-                    EnumSet.of(StartAction.REJOIN,StartAction.LIVE_REJOIN,StartAction.JOIN,StartAction.INITIALIZE));
+                    EnumSet.of(StartAction.REJOIN,StartAction.LIVE_REJOIN,StartAction.JOIN,StartAction.INITIALIZE, StartAction.PROBE));
             // require deployment file location
             if (requiresDeployment.contains(m_startAction)) {
                 // require deployment file location (null is allowed to receive default deployment)
@@ -1186,8 +1187,16 @@ public class VoltDB {
      *
      * @return A reference to the underlying VoltDBInterface object.
      */
-    public static VoltDBInterface instance() {
+    public static synchronized VoltDBInterface instance() {
+        if (singleton == null) {
+            singleton = new RealVoltDB();
+        }
         return singleton;
+    }
+
+    //Used by tests that init in process cluster and start in process.
+    public static synchronized void resetInstance() {
+        singleton = null;
     }
 
     /**
@@ -1244,8 +1253,8 @@ public class VoltDB {
         }
     }
 
-    public static void exit(int status) {
-        if (isThisATest() || ignoreCrash) {
+    public static void exit(Configuration config, int status) {
+        if (isThisATest() || config.ignoreCrashForInitialize) {
             throw new SimulatedExitException(status);
         }
         System.exit(status);

@@ -484,9 +484,9 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
             if (config.m_startAction == StartAction.INITIALIZE) {
                 stageDeploymemtFileForInitialize(config, readDepl.deployment);
                 stageInitializedMarker(config);
-                hostLog.info("Initialized VoltDB on " + config.m_voltdbRoot.getPath());
-                consoleLog.info("Initialized VoltDB on " + config.m_voltdbRoot.getPath());
-                VoltDB.exit(0);
+                hostLog.info("Initialized VoltDB on " + config.m_voltdbRoot.getAbsolutePath());
+                consoleLog.info("Initialized VoltDB on " + config.m_voltdbRoot.getAbsolutePath());
+                VoltDB.exit(config, 0);
             }
 
             if (config.m_startAction.isLegacy()) {
@@ -547,7 +547,7 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
                 System.setErr(new PrintStream(System.err, true, "UTF-8"));
             } catch (UnsupportedEncodingException e) {
                 hostLog.fatal("Support for the UTF-8 encoding is required for VoltDB. This means you are likely running an unsupported JVM. Exiting.");
-                VoltDB.exit(-1);
+                VoltDB.exit(m_config, -1);
             }
 
             m_snapshotCompletionMonitor = new SnapshotCompletionMonitor();
@@ -1560,8 +1560,8 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
             }
             // root in deployment conflicts with command line voltdbroot
             if (!VoltDB.DBROOT.equals(deprootFN) && differingRoots) {
-                consoleLog.info("Ignoring voltdbroot \"" + deprootFN + "\"specified in the deployment file");
-                hostLog.info("Ignoring voltdbroot \"" + deprootFN + "\"specified in the deployment file");
+                consoleLog.info("Ignoring voltdbroot \"" + deprootFN + "\" specified in the deployment file");
+                hostLog.info("Ignoring voltdbroot \"" + deprootFN + "\" specified in the deployment file");
             }
         } catch (IOException e) {
             VoltDB.crashLocalVoltDB(
@@ -1633,6 +1633,7 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
                 // can't copy file to itself
                 if (!depFH.getCanonicalFile().equals(optFH.getCanonicalFile())) {
                     Files.copy(optFH, depFH);
+                    config.m_voltdbRoot = depFH;
                 }
             } catch (IOException e) {
                 VoltDB.crashLocalVoltDB("Unable to set up deployment configuration in " + depFH, false, e);
@@ -1657,8 +1658,10 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
                 return !p.isDirectory() || !"log".equals(p.getName());
             }
         });
-        for (File c: allButLog) {
-            MiscUtils.deleteRecursively(c);
+        if (allButLog != null) {
+            for (File c: allButLog) {
+                MiscUtils.deleteRecursively(c);
+            }
         }
     }
 
