@@ -263,6 +263,9 @@ public class InitiatorMailbox implements Mailbox
             return;
         }
 
+        // VoltDB never puts scheduler in a separate thread with site
+        // So the code below is never used now
+        // TODO: remove me
         synchronized (this) {
             deliverInternal(message);
         }

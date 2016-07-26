@@ -29,12 +29,10 @@ import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import org.voltcore.logging.VoltLogger;
 import org.voltcore.messaging.HostMessenger;
 import org.voltcore.messaging.TransactionInfoBaseMessage;
-import org.voltcore.messaging.TruncationHandleMessage;
 import org.voltcore.messaging.VoltMessage;
 import org.voltcore.utils.CoreUtils;
 import org.voltdb.ClientResponseImpl;
@@ -146,7 +144,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
     // used to decide if we should shortcut reads
     private Consistency.ReadLevel m_defaultConsistencyReadLevel;
     private ShortCircuitReadLog m_shortCircuitReadLog = null;
-    public final long MAX_BUFFERED_READ_DURATION_CHECK = 20; // millisecond
 
     // Need to track when command log replay is complete (even if not performed) so that
     // we know when we can start writing viable replay sets to the fault log.
@@ -158,9 +155,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
 
     // the current not-needed-any-more point of the repair log.
     long m_repairLogTruncationHandle = Long.MIN_VALUE;
-
-    // the last not-needed-any-more point of the repair log.
-    long m_lastRepairLogTruncationHandle = Long.MIN_VALUE;
 
     SpScheduler(int partitionId, SiteTaskerQueue taskQueue, SnapshotCompletionMonitor snapMonitor)
     {
@@ -367,12 +361,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
     @Override
     public void deliver(VoltMessage message)
     {
-        if (message instanceof TruncationHandleMessage) {
-            TruncationHandleMessage msg = (TruncationHandleMessage) message;
-            m_shortCircuitReadLog.releaseShortCircuitRead(msg.getTruncationHandle(), true);
-            return;
-        }
-
         if (message instanceof Iv2InitiateTaskMessage) {
             handleIv2InitiateTaskMessage((Iv2InitiateTaskMessage)message);
         }
@@ -520,40 +508,33 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                 msg.setUniqueId(uniqueId);
             }
 
-            //Don't replicate reads, this really assumes that DML validation
-            //is going to be integrated soonish
-
-                if (m_isLeader && (!shortcutRead) && (m_sendToHSIds.length > 0)) {
-                    if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2 && msg.isReadOnly()) {
-                        // OPTION 2 do want to replica the READS
-
-                    } else {
-                        // FOR OPTION 2, reads
-                        Iv2InitiateTaskMessage replmsg =
-                            new Iv2InitiateTaskMessage(m_mailbox.getHSId(),
-                                    m_mailbox.getHSId(),
-                                    m_repairLogTruncationHandle,
-                                    msg.getTxnId(),
-                                    msg.getUniqueId(),
-                                    msg.isReadOnly(),
-                                    msg.isSinglePartition(),
-                                    msg.getStoredProcedureInvocation(),
-                                    msg.getClientInterfaceHandle(),
-                                    msg.getConnectionId(),
-                                    msg.isForReplay());
-                        // Update the handle in the copy since the constructor doesn't set it
-                        replmsg.setSpHandle(newSpHandle);
-                        m_mailbox.send(m_sendToHSIds, replmsg);
-
-                        DuplicateCounter counter = new DuplicateCounter(
-                                msg.getInitiatorHSId(),
+            // The leader will be responsible to replicate messages to replicas.
+            // Don't replicate reads, not matter FAST or SAFE.
+            if (m_isLeader && (!msg.isReadOnly()) && (m_sendToHSIds.length > 0)) {
+                Iv2InitiateTaskMessage replmsg =
+                        new Iv2InitiateTaskMessage(m_mailbox.getHSId(),
+                                m_mailbox.getHSId(),
+                                m_repairLogTruncationHandle,
                                 msg.getTxnId(),
-                                m_replicaHSIds,
-                                msg);
+                                msg.getUniqueId(),
+                                msg.isReadOnly(),
+                                msg.isSinglePartition(),
+                                msg.getStoredProcedureInvocation(),
+                                msg.getClientInterfaceHandle(),
+                                msg.getConnectionId(),
+                                msg.isForReplay());
+                // Update the handle in the copy since the constructor doesn't set it
+                replmsg.setSpHandle(newSpHandle);
+                m_mailbox.send(m_sendToHSIds, replmsg);
 
-                        safeAddToDuplicateCounterMap(new DuplicateCounterKey(msg.getTxnId(), newSpHandle), counter);
-                    }
-                }
+                DuplicateCounter counter = new DuplicateCounter(
+                        msg.getInitiatorHSId(),
+                        msg.getTxnId(),
+                        m_replicaHSIds,
+                        msg);
+
+                safeAddToDuplicateCounterMap(new DuplicateCounterKey(msg.getTxnId(), newSpHandle), counter);
+            }
         }
         else {
             setMaxSeenTxnId(msg.getSpHandle());
@@ -711,16 +692,10 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         // All short-circuit reads will have no duplicate counter.
         // Avoid all the lookup below.
         // Also, don't update the truncation handle, since it won't have meaning for anyone.
-        if (message.isReadOnly()) {
-            if (m_defaultConsistencyReadLevel == ReadLevel.FAST) {
-                // the initiatorHSId is the ClientInterface mailbox.
-                m_mailbox.send(message.getInitiatorHSId(), message);
-                return;
-            }
-            if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_1) {
-                m_shortCircuitReadLog.offerSp(message, m_isLeader, m_repairLogTruncationHandle);
-                return;
-            }
+        if (message.isReadOnly() && m_defaultConsistencyReadLevel.hasShortcutRead()) {
+            // the initiatorHSId is the ClientInterface mailbox.
+            m_mailbox.send(message.getInitiatorHSId(), message);
+            return;
         }
 
         final long spHandle = message.getSpHandle();
@@ -743,7 +718,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             m_mailbox.send(message.getInitiatorHSId(), message);
         }
 
-        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2 && m_isLeader && message.isReadOnly() &&
+        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE && m_isLeader && message.isReadOnly() &&
                 m_shortCircuitReadLog != null) {
             m_shortCircuitReadLog.offerSp(message, m_isLeader, m_repairLogTruncationHandle);
         }
@@ -1188,40 +1163,9 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
     }
 
     public void setShortCircuitRead(boolean isForTest) {
-        if (m_defaultConsistencyReadLevel != ReadLevel.SAFE_1 && m_defaultConsistencyReadLevel != ReadLevel.SAFE_2) {
-            return;
+        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE) {
+            m_shortCircuitReadLog = new ShortCircuitReadLog(m_mailbox);
         }
-        m_shortCircuitReadLog = new ShortCircuitReadLog(m_mailbox);
-
-        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE_2) {
-            // do not construct the scheduler work
-            return;
-        }
-
-        // TODO(xin): it's better not to create the scheduler work on replicas.
-        VoltDB.instance().schedulePriorityWork(
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        synchronized (m_mailbox) {
-                            if (m_isLeader) {
-                                if (m_lastRepairLogTruncationHandle != m_repairLogTruncationHandle) {
-                                    m_lastRepairLogTruncationHandle = m_repairLogTruncationHandle;
-                                    TruncationHandleMessage message = new TruncationHandleMessage(
-                                            m_repairLogTruncationHandle);
-                                    m_mailbox.send(m_sendToHSIds, message);
-                                }
-//                                System.out.println("TruncationHandleMessage with handle " + m_repairLogTruncationHandle
-//                                        + " sent to ids: " + m_sendToHSIds.length);
-                            }
-
-                        }
-                    }
-                },
-                MAX_BUFFERED_READ_DURATION_CHECK * 10,
-                MAX_BUFFERED_READ_DURATION_CHECK,
-                TimeUnit.MILLISECONDS);
     }
-
 
 }
