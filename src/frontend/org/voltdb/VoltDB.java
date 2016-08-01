@@ -55,6 +55,7 @@ import org.voltdb.utils.VoltFile;
 
 import com.google_voltpatches.common.collect.ImmutableSortedSet;
 import com.google_voltpatches.common.net.HostAndPort;
+import org.voltdb.compiler.deploymentfile.PathsType;
 
 /**
  * VoltDB provides main() for the VoltDB server
@@ -78,10 +79,18 @@ public class VoltDB {
 
     // Staged filenames for advanced deployments
     public static final String INITIALIZED_MARKER = ".initialized";
+    public static final String INITIALIZED_PATHS = ".paths";
     public static final String STAGED_MESH = "_MESH";
     public static final String CONFIG_DIR = "config";
     public static final String DEFAULT_CLUSTER_NAME = "database";
     public static final String DBROOT = Constants.DBROOT;
+
+    public static final String CL_SNAPSHOT_PATH_KEY = "org.voltdb.path.command_log_snapshot";
+    public static final String CL_PATH_KEY = "org.voltdb.path.command_log";
+    public static final String SNAPTHOT_PATH_KEY = "org.voltdb.path.snapshots";
+    public static final String VOLTDBROOT_PATH_KEY = "org.voltdb.path.voltdbroot";
+    public static final String EXPORT_OVERFLOW_PATH_KEY = "org.voltdb.path.export_overflow";
+    public static final String DR_OVERFLOW_PATH_KEY = "org.voltdb.path.dr_overflow";
 
     // Utility to try to figure out if this is a test case.  Various junit targets in
     // build.xml set this environment variable to give us a hint
@@ -616,7 +625,7 @@ public class VoltDB {
 
             // If no action is specified, issue an error.
             if (null == m_startAction) {
-                hostLog.fatal("You must specify a startup action, either initialize, probe, create, recover, rejoin, collect, or compile.");
+                hostLog.fatal("You must specify a startup action, either init, start, create, recover, rejoin, collect, or compile.");
                 referToDocAndExit();
             }
 
@@ -643,7 +652,7 @@ public class VoltDB {
                 if (isInitialized() && !m_forceVoltdbCreate) {
                     hostLog.fatal(m_voltdbRoot + " is already initialized"
                             + "\nUse the start command to start the initialized database or use init --force"
-                            + " to initialize a new database overwriting existing files.");
+                            + " to overwrite existing files.");
                     referToDocAndExit();
                 }
             } else if (m_meshBrokers == null || m_meshBrokers.trim().isEmpty()) {
@@ -691,7 +700,7 @@ public class VoltDB {
                     referToDocAndExit();
                 }
                 if (!configCFH.equals(optCFH)) {
-                    hostLog.fatal("In probe startup mode you may only specify " + deploymentFH + " for deployment");
+                    hostLog.fatal("In startup mode you may only specify " + deploymentFH + " for deployment");
                     referToDocAndExit();
                 }
             } else {
@@ -699,7 +708,7 @@ public class VoltDB {
             }
 
             if (!inzFH.exists() || !inzFH.isFile() || !inzFH.canRead()) {
-                hostLog.fatal("Probe startup mode requires an already initialized VoltDB instance");
+                hostLog.fatal("Specified directory is not a VoltDB initialized root");
                 referToDocAndExit();
             }
 
@@ -776,16 +785,24 @@ public class VoltDB {
             EnumSet<StartAction> pauseNotAllowed = EnumSet.of(StartAction.JOIN,StartAction.LIVE_REJOIN,StartAction.REJOIN);
             if (m_isPaused && pauseNotAllowed.contains(m_startAction)) {
                 isValid = false;
-                hostLog.fatal("Starting in paused mode is only allowed when starting using create or recover.");
+                hostLog.fatal("Starting in admin mode is only allowed when using start, create or recover.");
             }
             if (m_startAction != StartAction.INITIALIZE && m_coordinators.isEmpty()) {
                 isValid = false;
-                hostLog.fatal("Coordinator hosts are missing");
+                hostLog.fatal("List of hosts is missing");
             }
 
             if (m_startAction != StartAction.PROBE && m_hostCount != UNDEFINED) {
                 isValid = false;
-                hostLog.fatal("Option \"hostcount\" may only be specified when the start action is probe");
+                hostLog.fatal("Option \"--count\" may only be specified when using start");
+            }
+            if (m_startAction == StartAction.PROBE && m_hostCount != UNDEFINED && m_hostCount < m_coordinators.size()) {
+                isValid = false;
+                hostLog.fatal("List of hosts is greater than option \"--count\"");
+            }
+            if (m_startAction == StartAction.PROBE && m_hostCount != UNDEFINED && m_hostCount < 0) {
+                isValid = false;
+                hostLog.fatal("\"--count\" may not be specified with negative values");
             }
             if (m_startAction == StartAction.JOIN && !m_enableAdd) {
                 isValid = false;
@@ -893,7 +910,7 @@ public class VoltDB {
         if (hm != null) {
             hostId = hm.getHostId();
         }
-        String root = catalogContext != null ? catalogContext.cluster.getVoltroot() + File.separator : "";
+        String root = catalogContext != null ? VoltDB.instance().getVoltDBRootPath() + File.separator : "";
         try {
             PrintWriter writer = new PrintWriter(root + "host" + hostId + "-" + dateString + ".txt");
             writer.println(message);
@@ -1025,7 +1042,7 @@ public class VoltDB {
                 {
                     TimestampType ts = new TimestampType(new java.util.Date());
                     CatalogContext catalogContext = VoltDB.instance().getCatalogContext();
-                    String root = catalogContext != null ? catalogContext.cluster.getVoltroot() + File.separator : "";
+                    String root = catalogContext != null ? VoltDB.instance().getVoltDBRootPath() + File.separator : "";
                     PrintWriter writer = new PrintWriter(root + "voltdb_crash" + ts.toString().replace(' ', '-') + ".txt");
                     writer.println("Time: " + ts);
                     writer.println("Message: " + errMsg);

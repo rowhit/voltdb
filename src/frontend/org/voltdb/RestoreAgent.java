@@ -19,12 +19,9 @@ package org.voltdb;
 
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,10 +58,12 @@ import org.voltdb.jni.ExecutionEngine;
 import org.voltdb.sysprocs.saverestore.SnapshotUtil;
 import org.voltdb.sysprocs.saverestore.SnapshotUtil.Snapshot;
 import org.voltdb.sysprocs.saverestore.SnapshotUtil.TableFiles;
+import org.voltdb.utils.CatalogUtil;
 import org.voltdb.utils.InMemoryJarfile;
 import org.voltdb.utils.MiscUtils;
 
 import com.google_voltpatches.common.collect.ImmutableSet;
+import org.voltdb.sysprocs.saverestore.SnapshotPathType;
 
 /**
  * An agent responsible for the whole restore process when the cluster starts
@@ -186,6 +185,7 @@ SnapshotCompletionInterest, Promotable
                                 " in " + m_snapshotToRestore.path);
                         JSONObject jsObj = new JSONObject();
                         jsObj.put(SnapshotUtil.JSON_PATH, m_snapshotToRestore.path);
+                        jsObj.put(SnapshotUtil.JSON_PATH_TYPE, m_snapshotToRestore.pathType);
                         jsObj.put(SnapshotUtil.JSON_NONCE, m_snapshotToRestore.nonce);
                         jsObj.put(SnapshotUtil.JSON_IS_RECOVER, true);
                         if (m_action == StartAction.SAFE_RECOVER) {
@@ -238,6 +238,8 @@ SnapshotCompletionInterest, Promotable
         public final Set<String> digestTables = new HashSet<String>();
         // Track the tables for which we found files on the node reporting this SnapshotInfo
         public final Set<String> fileTables = new HashSet<String>();
+        public final SnapshotPathType pathType;
+
 
         public void setPidToTxnIdMap(Map<Integer,Long> map) {
             partitionToTxnId.putAll(map);
@@ -246,7 +248,7 @@ SnapshotCompletionInterest, Promotable
         public SnapshotInfo(long txnId, String path, String nonce,
                             int partitions, int newPartitionCount,
                             long catalogCrc, int hostId, InstanceId instanceId,
-                            Set<String> digestTables)
+                            Set<String> digestTables, SnapshotPathType snaptype)
         {
             this.txnId = txnId;
             this.path = path;
@@ -257,13 +259,15 @@ SnapshotCompletionInterest, Promotable
             this.hostId = hostId;
             this.instanceId = instanceId;
             this.digestTables.addAll(digestTables);
+            this.pathType = snaptype;
         }
 
         public SnapshotInfo(JSONObject jo) throws JSONException
         {
             txnId = jo.getLong("txnId");
-            path = jo.getString("path");
-            nonce = jo.getString("nonce");
+            path = jo.getString(SnapshotUtil.JSON_PATH);
+            pathType = SnapshotPathType.valueOf(jo.getString(SnapshotUtil.JSON_PATH_TYPE));
+            nonce = jo.getString(SnapshotUtil.JSON_NONCE);
             partitionCount = jo.getInt("partitionCount");
             newPartitionCount = jo.getInt("newPartitionCount");
             catalogCrc = jo.getLong("catalogCrc");
@@ -309,6 +313,7 @@ SnapshotCompletionInterest, Promotable
                 stringer.object();
                 stringer.key("txnId").value(txnId);
                 stringer.key("path").value(path);
+                stringer.key(SnapshotUtil.JSON_PATH_TYPE).value(pathType.name());
                 stringer.key("nonce").value(nonce);
                 stringer.key("partitionCount").value(partitionCount);
                 stringer.key("newPartitionCount").value(newPartitionCount);
@@ -806,50 +811,37 @@ SnapshotCompletionInterest, Promotable
             return null;
         }
 
-        FileInputStream fin = null;
         try {
-            fin = new FileInputStream(s.m_catalogFile);
-            byte[] buffer = new byte[(int)s.m_catalogFile.length() + 1000];
-            int readBytes = 0;
-            int totalBytes = 0;
-            try {
-                while (readBytes >= 0) {
-                    totalBytes += readBytes;
-                    readBytes = fin.read(buffer, totalBytes, buffer.length - totalBytes - 1);
-                }
-            } finally {
-                fin.close();
-                fin = null;
-            }
-            byte[] catalogBytes = Arrays.copyOf(buffer, totalBytes);
-            InMemoryJarfile jarfile = new InMemoryJarfile(catalogBytes);
+            byte[] bytes = MiscUtils.fileToBytes(s.m_catalogFile);
+            InMemoryJarfile jarfile = CatalogUtil.loadInMemoryJarFile(bytes);
             if (jarfile.getCRC() != catalog_crc) {
                 m_snapshotErrLogStr.append("\nRejected snapshot ")
                                 .append(s.getNonce())
                                 .append(" because catalog CRC did not match digest.");
                 return null;
             }
-        }
-        catch (IOException ioe) {
+            // Make sure this is not a partial snapshot.
+            // Compare digestTableNames with all normal table names in catalog file.
+            // A normal table is one that's NOT a materialized view, nor an export table.
+            Set<String> catalogNormalTableNames = CatalogUtil.getNormalTableNamesFromInMemoryJar(jarfile);
+            if (!catalogNormalTableNames.equals(digestTableNames)) {
+                m_snapshotErrLogStr.append("\nRejected snapshot ")
+                                .append(s.getNonce())
+                                .append(" because this is a partial snapshot.");
+                return null;
+            }
+        } catch (IOException ioe) {
             m_snapshotErrLogStr.append("\nRejected snapshot ")
                             .append(s.getNonce())
-                            .append(" because catalog CRC could not be validated");
+                            .append(" because catalog file could not be validated");
             return null;
-        }
-        finally {
-            if (fin != null) {
-                try {
-                    fin.close();
-                }
-                catch (Exception e) {}
-            }
         }
 
         SnapshotInfo info =
             new SnapshotInfo(key, digest.getParent(),
                     SnapshotUtil.parseNonceFromDigestFilename(digest.getName()),
                     partitionCount, newParitionCount, catalog_crc, m_hostId, instanceId,
-                    digestTableNames);
+                    digestTableNames, s.m_stype);
         // populate table to partition map.
         for (Entry<String, TableFiles> te : s.m_tableFiles.entrySet()) {
             TableFiles tableFile = te.getValue();
@@ -1328,15 +1320,12 @@ SnapshotCompletionInterest, Promotable
              * will truncate the logs
              */
             if (m_isLeader) {
+                String truncationRequest = "";
                 try {
-                    try {
-                        m_zk.create(VoltZK.truncation_snapshot_path,
-                                    m_clSnapshotPath.getBytes(),
-                                    Ids.OPEN_ACL_UNSAFE,
-                                    CreateMode.PERSISTENT);
-                    } catch (KeeperException.NodeExistsException e) {}
-                    m_zk.create(VoltZK.request_truncation_snapshot_node, null,
-                            Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT_SEQUENTIAL);
+                    truncationRequest = m_zk.create(VoltZK.request_truncation_snapshot_node, null, Ids.OPEN_ACL_UNSAFE,
+                              CreateMode.PERSISTENT_SEQUENTIAL);
+                } catch (KeeperException.NodeExistsException e) {
+                    LOG.info("Initial Truncation request failed as one is in progress: " + truncationRequest);
                 } catch (Exception e) {
                     VoltDB.crashGlobalVoltDB("Requesting a truncation snapshot " +
                                              "via ZK should always succeed",
@@ -1357,20 +1346,20 @@ SnapshotCompletionInterest, Promotable
          * Use the individual snapshot directories instead of voltroot, because
          * they can be set individually
          */
-        List<String> paths = new ArrayList<String>();
+        Map<String, SnapshotPathType> paths = new HashMap<String, SnapshotPathType>();
         if (VoltDB.instance().getConfig().m_isEnterprise) {
             if (m_clSnapshotPath != null) {
-                paths.add(m_clSnapshotPath);
+                paths.put(m_clSnapshotPath, SnapshotPathType.SNAP_CL);
             }
         }
         if (m_snapshotPath != null) {
-            paths.add(m_snapshotPath);
+            paths.put(m_snapshotPath, SnapshotPathType.SNAP_AUTO);
         }
         HashMap<String, Snapshot> snapshots = new HashMap<String, Snapshot>();
         FileFilter filter = new SnapshotUtil.SnapshotFilter();
 
-        for (String path : paths) {
-            SnapshotUtil.retrieveSnapshotFiles(new File(path), snapshots, filter, false, LOG);
+        for (String path : paths.keySet()) {
+            SnapshotUtil.retrieveSnapshotFiles(new File(path), snapshots, filter, false, paths.get(path), LOG);
         }
 
         return snapshots;
