@@ -471,21 +471,23 @@ public class LocalCluster implements VoltServerConfig {
     void startLocalServer(int hostId, boolean clearLocalDataDirectories, StartAction action) throws IOException {
         // Generate a new root for the in-process server if clearing directories.
         File subroot = null;
-        try {
-            if (m_filePrefix != null) {
-                subroot = m_filePrefix;
-                m_subRoots.add(subroot);
-            } else if (clearLocalDataDirectories) {
-                subroot = VoltFile.initNewSubrootForThisProcess();
-                m_subRoots.add(subroot);
-            } else {
-                if (m_subRoots.size() <= hostId) {
-                    m_subRoots.add(VoltFile.initNewSubrootForThisProcess());
+        if (!isNewCli) {
+            try {
+                if (m_filePrefix != null) {
+                    subroot = m_filePrefix;
+                    m_subRoots.add(subroot);
+                } else if (clearLocalDataDirectories) {
+                    subroot = VoltFile.initNewSubrootForThisProcess();
+                    m_subRoots.add(subroot);
+                } else {
+                    if (m_subRoots.size() <= hostId) {
+                        m_subRoots.add(VoltFile.initNewSubrootForThisProcess());
+                    }
+                    subroot = m_subRoots.get(hostId);
                 }
-                subroot = m_subRoots.get(hostId);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
 
         // Make the local Configuration object...
@@ -544,7 +546,6 @@ public class LocalCluster implements VoltServerConfig {
             cmdln.m_hostCount = m_hostCount;
             String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
             String root = m_hostRoots.get(hostIdStr);
-            cmdln.pathToDeployment(null);
             cmdln.voltdbRoot(root);
         }
         m_localServer = new ServerThread(cmdln);
@@ -552,25 +553,6 @@ public class LocalCluster implements VoltServerConfig {
     }
 
     void initLocalServer(int hostId, boolean clearLocalDataDirectories) throws IOException {
-        // Generate a new root for the in-process server if clearing directories.
-        File subroot = null;
-        try {
-            if (m_filePrefix != null) {
-                subroot = m_filePrefix;
-                m_subRoots.add(subroot);
-            } else if (clearLocalDataDirectories) {
-                subroot = VoltFile.initNewSubrootForThisProcess();
-                m_subRoots.add(subroot);
-            } else {
-                if (m_subRoots.size() <= hostId) {
-                    m_subRoots.add(VoltFile.initNewSubrootForThisProcess());
-                }
-                subroot = m_subRoots.get(hostId);
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
         // Make the local Configuration object...
         CommandLine cmdln = (templateCmdLine.makeCopy());
         cmdln.startCommand(StartAction.INITIALIZE);
@@ -583,7 +565,10 @@ public class LocalCluster implements VoltServerConfig {
 
         //If we are initializing lets wait for it to finish.
         ServerThread th = new ServerThread(cmdln);
-        cmdln.voltdbRoot((new File(cmdln.pathToDeployment())).getParent());
+        File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId));
+        cmdln.voltdbRoot(root);
+        VoltFile.recursivelyDelete(root);
+
         th.start();
         try {
             th.join();
@@ -591,7 +576,7 @@ public class LocalCluster implements VoltServerConfig {
             //Keep track by hostid the voltdbroot
             String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
             m_hostRoots.put(hostIdStr, cmdln.voltdbRoot().getAbsolutePath());
-        } catch (InterruptedException ex) {
+        } catch (Exception ex) {
             ex.printStackTrace();
         }
     }
@@ -828,28 +813,11 @@ public class LocalCluster implements VoltServerConfig {
                 assert(proc != null);
                 cmdln.m_ipcPort = proc.port();
             }
-
-            // If local directories are being cleared
-            // generate a new subroot, otherwise reuse the existing directory
-            File subroot = null;
-            if (m_filePrefix != null) {
-                subroot = m_filePrefix;
-                m_subRoots.add(subroot);
-            } else if (clearLocalDataDirectories) {
-                subroot = VoltFile.getNewSubroot();
-                m_subRoots.add(subroot);
-            } else {
-                if (m_subRoots.size() <= hostId) {
-                    m_subRoots.add(VoltFile.getNewSubroot());
-                }
-                subroot = m_subRoots.get(hostId);
-            }
-            if (!isNewCli) {
-                cmdln.voltFilePrefix(subroot.getPath());
-            }
-            cmdln.voltRoot(subroot.getPath() + "/" + m_voltdbroot);
-            cmdln.voltdbRoot((new File(cmdln.pathToDeployment())).getParent());
-            cmdln.startCommand(StartAction.INITIALIZE);
+            //If clear clean VoltFile.getServerSpecificRoot(String.valueOf(hostId))
+            File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId));
+            VoltFile.recursivelyDelete(root);
+            cmdln = cmdln.voltdbRoot(root);
+            cmdln = cmdln.startCommand(StartAction.INITIALIZE);
 
             if ((m_versionOverrides != null) && (m_versionOverrides.length > hostId)) {
                 assert(m_versionOverrides[hostId] != null);
@@ -870,12 +838,13 @@ public class LocalCluster implements VoltServerConfig {
             m_cmdLines.add(cmdln);
             m_procBuilder.command().clear();
             List<String> cmdlnList = cmdln.createCommandLine();
-            String cmdLineFull = "Start cmd host=" + String.valueOf(hostId) + " :";
+            String cmdLineFull = "Init cmd host=" + String.valueOf(hostId) + " :";
             for (String element : cmdlnList) {
                 assert(element != null);
                 cmdLineFull += " " + element;
             }
             log.info(cmdLineFull);
+            System.out.println(cmdLineFull);
             m_procBuilder.command().addAll(cmdlnList);
 
             // write output to obj/release/testoutput/<test name>-n.txt
@@ -927,7 +896,7 @@ public class LocalCluster implements VoltServerConfig {
 
         waitOnPTFReady(ptf, true, System.currentTimeMillis(), System.currentTimeMillis(), hostId);
         String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
-        m_hostRoots.put(hostIdStr, cmdln.voltdbRoot().getAbsolutePath());
+        m_hostRoots.put(hostIdStr, cmdln.voltdbRoot().getPath());
     }
 
     private void startOne(int hostId, boolean clearLocalDataDirectories, ReplicationRole replicaMode, StartAction startAction)
@@ -940,7 +909,6 @@ public class LocalCluster implements VoltServerConfig {
             cmdln.m_hostCount = m_hostCount;
             String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
             String root = m_hostRoots.get(hostIdStr);
-            cmdln.pathToDeployment(null);
             cmdln.voltdbRoot(root);
         }
 
@@ -985,33 +953,34 @@ public class LocalCluster implements VoltServerConfig {
             }
 
             cmdln.zkport(portGenerator.nextZkPort());
-
-            if (startAction == StartAction.JOIN) {
-                cmdln.startCommand(startAction);
-                int portNoToRejoin = m_cmdLines.get(0).internalPort();
-                cmdln.leader(":" + portNoToRejoin);
-                cmdln.enableAdd(true);
+            if (!isNewCli) {
+                if (startAction == StartAction.JOIN) {
+                    cmdln.startCommand(startAction);
+                    int portNoToRejoin = m_cmdLines.get(0).internalPort();
+                    cmdln.leader(":" + portNoToRejoin);
+                    cmdln.enableAdd(true);
+                }
             }
 
             // If local directories are being cleared
             // generate a new subroot, otherwise reuse the existing directory
             File subroot = null;
-            if (m_filePrefix != null) {
-                subroot = m_filePrefix;
-                m_subRoots.add(subroot);
-            } else if (clearLocalDataDirectories) {
-                subroot = VoltFile.getNewSubroot();
-                m_subRoots.add(subroot);
-            } else {
-                if (m_subRoots.size() <= hostId) {
-                    m_subRoots.add(VoltFile.getNewSubroot());
-                }
-                subroot = m_subRoots.get(hostId);
-            }
             if (!isNewCli) {
+                if (m_filePrefix != null) {
+                    subroot = m_filePrefix;
+                    m_subRoots.add(subroot);
+                } else if (clearLocalDataDirectories) {
+                    subroot = VoltFile.getNewSubroot();
+                    m_subRoots.add(subroot);
+                } else {
+                    if (m_subRoots.size() <= hostId) {
+                        m_subRoots.add(VoltFile.getNewSubroot());
+                    }
+                    subroot = m_subRoots.get(hostId);
+                }
                 cmdln.voltFilePrefix(subroot.getPath());
+                cmdln.voltRoot(subroot.getPath() + "/" + m_voltdbroot);
             }
-            cmdln.voltRoot(subroot.getPath() + "/" + m_voltdbroot);
 
             if ((m_versionOverrides != null) && (m_versionOverrides.length > hostId)) {
                 assert(m_versionOverrides[hostId] != null);
@@ -1038,6 +1007,7 @@ public class LocalCluster implements VoltServerConfig {
                 cmdLineFull += " " + element;
             }
             log.info(cmdLineFull);
+            System.out.println(cmdLineFull);
             m_procBuilder.command().addAll(cmdlnList);
 
             // write output to obj/release/testoutput/<test name>-n.txt

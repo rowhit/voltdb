@@ -112,6 +112,14 @@ public class VoltFile extends File {
         return tempFile;
     }
 
+    public static File getServerSpecificRoot(String hostId) throws IOException {
+        ensureUserRootExists();
+        File tempUserDir = new File(m_root, hostId);
+        if (!tempUserDir.mkdir()) {
+            throw new IOException();
+        }
+        return tempUserDir;
+    }
     /*
      * Basic kill it with fire. Deletes everything in /tmp/${username} of
      * the actual filesystem (not one of the created subroots)

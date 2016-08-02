@@ -563,7 +563,6 @@ public class CommandLine extends VoltDB.Configuration
         cmdline.add("-XX:CMSInitiatingOccupancyFraction=75");
         cmdline.add("-XX:+UseCMSInitiatingOccupancyOnly");
         cmdline.add("-XX:+CMSClassUnloadingEnabled");
-        cmdline.add("-XX:PermSize=64m");
 
         /*
          * Have RMI not invoke System.gc constantly
@@ -594,7 +593,6 @@ public class CommandLine extends VoltDB.Configuration
             cmdline.add("-DVoltFilePrefix=" + voltFilePrefix);
             cmdline.add("-ea");
             cmdline.add("-XX:MaxDirectMemorySize=2g");
-            cmdline.add("-XX:-UseSplitVerifier");
         }
         else
         {
@@ -749,7 +747,9 @@ public class CommandLine extends VoltDB.Configuration
             cmdline.add("paused");
         }
 
-        cmdline.add("mesh"); cmdline.add(Joiner.on(',').skipNulls().join(m_coordinators));
+        if (m_startAction != StartAction.INITIALIZE) {
+            cmdline.add("mesh"); cmdline.add(Joiner.on(',').skipNulls().join(m_coordinators));
+        }
 
         if (m_startAction == StartAction.PROBE) {
             cmdline.add("hostcount"); cmdline.add(Integer.toString(m_hostCount));
