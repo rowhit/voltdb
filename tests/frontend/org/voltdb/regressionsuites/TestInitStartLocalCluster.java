@@ -23,16 +23,14 @@
 
 package org.voltdb.regressionsuites;
 
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.voltdb.BackendTarget;
 import org.voltdb.VoltTable;
 import org.voltdb.client.Client;
-import org.voltdb.client.ClientResponse;
-import org.voltdb.client.ProcedureCallback;
 import org.voltdb.utils.MiscUtils;
 
 import junit.framework.Test;
+import org.voltdb.benchmark.tpcc.TPCCProjectBuilder;
 
 
 /**
@@ -43,9 +41,13 @@ import junit.framework.Test;
  */
 public class TestInitStartLocalCluster extends RegressionSuite {
 
-    static final int SITES_PER_HOST = 2;
-    static final int HOSTS = 1;
+    static final int SITES_PER_HOST = 8;
+    static final int HOSTS = 3;
     static final int K = MiscUtils.isPro() ? 1 : 0;
+    // procedures used by these tests
+    static Class<?>[] BASEPROCS = { org.voltdb.benchmark.tpcc.procedures.InsertNewOrder.class,
+                                    org.voltdb.benchmark.tpcc.procedures.SelectAll.class,
+                                    org.voltdb.benchmark.tpcc.procedures.delivery.class };
 
     /**
      * Constructor needed for JUnit. Should just pass on parameters to superclass.
@@ -53,30 +55,6 @@ public class TestInitStartLocalCluster extends RegressionSuite {
      */
     public TestInitStartLocalCluster(String name) {
         super(name);
-    }
-
-    AtomicInteger m_outstandingCalls = new AtomicInteger(0);
-
-    boolean callbackSuccess;
-
-    class CatTestCallback implements ProcedureCallback {
-
-        final byte m_expectedStatus;
-
-        CatTestCallback(byte expectedStatus) {
-            m_expectedStatus = expectedStatus;
-            m_outstandingCalls.incrementAndGet();
-        }
-
-        @Override
-        public void clientCallback(ClientResponse clientResponse) {
-            m_outstandingCalls.decrementAndGet();
-            if (m_expectedStatus != clientResponse.getStatus()) {
-                if (clientResponse.getStatusString() != null)
-                    System.err.println(clientResponse.getStatusString());
-                callbackSuccess = false;
-            }
-        }
     }
 
     public void testClusterUp() throws Exception
@@ -95,22 +73,21 @@ public class TestInitStartLocalCluster extends RegressionSuite {
         assertEquals(org.voltcore.common.Constants.DEFAULT_HEARTBEAT_TIMEOUT_SECONDS, timeout);
     }
 
-    /**
-     * Build a list of the tests that will be run when TestTPCCSuite gets run by JUnit.
-     * Use helper classes that are part of the RegressionSuite framework.
-     * This particular class runs all tests on the the local JNI backend with both
-     * one and two partition configurations, as well as on the hsql backend.
-     *
-     * @return The TestSuite containing all the tests to be run.
-     * @throws Exception
-     */
     static public Test suite() throws Exception {
         // the suite made here will all be using the tests from this class
         MultiConfigSuiteBuilder builder = new MultiConfigSuiteBuilder(TestInitStartLocalCluster.class);
 
         // get a server config for the native backend with one sites/partitions
         VoltServerConfig config = new LocalCluster("catalogupdate-cluster-base.jar", SITES_PER_HOST, HOSTS, K, BackendTarget.NATIVE_EE_JNI);
-        ((LocalCluster )config).setHasLocalServer(false);
+        ((LocalCluster)config).setHasLocalServer(false);
+        // build up a project builder for the workload
+        TPCCProjectBuilder project = new TPCCProjectBuilder();
+        project.addDefaultSchema();
+        project.addDefaultPartitioning();
+        project.addProcedures(BASEPROCS);
+        // build the jarfile
+        boolean basecompile = config.compile(project);
+        assertTrue(basecompile);
         builder.addServerConfig(config);
         return builder;
     }
@@ -118,12 +95,10 @@ public class TestInitStartLocalCluster extends RegressionSuite {
     @Override
     public void tearDown() throws Exception {
         super.tearDown();
-        assertTrue(callbackSuccess);
     }
 
     @Override
     public void setUp() throws Exception {
         super.setUp();
-        callbackSuccess = true;
     }
 }

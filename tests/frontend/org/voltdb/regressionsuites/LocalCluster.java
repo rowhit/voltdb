@@ -263,6 +263,7 @@ public class LocalCluster implements VoltServerConfig {
 
         m_siteCount = siteCount;
         m_hostCount = hostCount;
+        templateCmdLine.hostCount(hostCount);
         if (kfactor > 0 && !MiscUtils.isPro()) {
             m_kfactor = 0;
         } else {
@@ -835,7 +836,6 @@ public class LocalCluster implements VoltServerConfig {
                 cmdln.m_modeOverrideForTest = m_modeOverrides[hostId];
             }
 
-            m_cmdLines.add(cmdln);
             m_procBuilder.command().clear();
             List<String> cmdlnList = cmdln.createCommandLine();
             String cmdLineFull = "Init cmd host=" + String.valueOf(hostId) + " :";

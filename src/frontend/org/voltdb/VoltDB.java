@@ -55,7 +55,6 @@ import org.voltdb.utils.VoltFile;
 
 import com.google_voltpatches.common.collect.ImmutableSortedSet;
 import com.google_voltpatches.common.net.HostAndPort;
-import org.voltdb.compiler.deploymentfile.PathsType;
 
 /**
  * VoltDB provides main() for the VoltDB server
@@ -700,7 +699,7 @@ public class VoltDB {
                     referToDocAndExit();
                 }
                 if (!configCFH.equals(optCFH)) {
-                    hostLog.fatal("In startup mode you may only specify " + deploymentFH + " for deployment");
+                    hostLog.fatal("In startup mode you may only specify " + deploymentFH + " for deployment, You specified: " + optCFH);
                     referToDocAndExit();
                 }
             } else {
@@ -1016,6 +1015,9 @@ public class VoltDB {
         }
         if (VoltDB.isThisATest()) {
             VoltLogger log = new VoltLogger("HOST");
+            if (thrown != null) {
+                thrown.printStackTrace();
+            }
             log.warn("Declining to drop a crash file during a junit test.");
         }
         // end test code

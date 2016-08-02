@@ -37,6 +37,7 @@ import org.voltdb.probe.MeshProber;
 import com.google_voltpatches.common.base.Joiner;
 import com.google_voltpatches.common.collect.ImmutableSortedSet;
 import java.io.IOException;
+import org.voltdb.common.Constants;
 
 
 // VoltDB.Configuration represents all of the VoltDB command line parameters.
@@ -345,6 +346,8 @@ public class CommandLine extends VoltDB.Configuration
 
     String voltFilePrefix = "";
     public CommandLine voltFilePrefix(String voltFilePrefix) {
+        if (m_newCli) return this;
+
         this.voltFilePrefix = voltFilePrefix;
         return this;
     }
@@ -590,7 +593,9 @@ public class CommandLine extends VoltDB.Configuration
         if (includeTestOpts)
         {
             cmdline.add("-DLOG_SEGMENT_SIZE=8");
-            cmdline.add("-DVoltFilePrefix=" + voltFilePrefix);
+            if (!m_newCli) {
+                cmdline.add("-DVoltFilePrefix=" + voltFilePrefix);
+            }
             cmdline.add("-ea");
             cmdline.add("-XX:MaxDirectMemorySize=2g");
         }
@@ -652,7 +657,8 @@ public class CommandLine extends VoltDB.Configuration
         if (jarFileName() != null) {
             cmdline.add("catalog"); cmdline.add(jarFileName());
         }
-        if (pathToDeployment() != null) {
+        //Add deployment if its not probe
+        if (pathToDeployment() != null && m_startAction != StartAction.PROBE) {
             cmdline.add("deployment"); cmdline.add(pathToDeployment());
         }
 
@@ -695,6 +701,9 @@ public class CommandLine extends VoltDB.Configuration
         if (m_internalInterface != null && (m_externalInterface != null && !m_externalInterface.isEmpty()))
         {
             cmdline.add("externalinterface"); cmdline.add(m_externalInterface);
+        }
+        if (m_httpPort != Constants.HTTP_PORT_DISABLED) {
+            cmdline.add("httpport"); cmdline.add(Integer.toString(m_httpPort));
         }
 
         if (m_forceVoltdbCreate)
