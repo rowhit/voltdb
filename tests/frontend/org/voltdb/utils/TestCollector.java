@@ -91,12 +91,15 @@ public class TestCollector {
         cluster.setHasLocalServer(false);
         boolean success = cluster.compile(builder);
         assert (success);
+        File voltDbRoot;
+        if (cluster.isNewCli()) {
+            voltDbRoot = VoltFile.getServerSpecificRoot(String.valueOf(0), true);
+        } else {
+            String voltDbFilePrefix = cluster.getSubRoots().get(0).getPath();
+            voltDbRoot = new File(voltDbFilePrefix, builder.getPathToVoltRoot().getPath());
+        }
         cluster.startUp(true);
-
-        String voltDbFilePrefix = cluster.getSubRoots().get(0).getPath();
-        File voltDbRoot = new File(voltDbFilePrefix, builder.getPathToVoltRoot().getPath());
         voltDbRootPath = voltDbRoot.getPath();
-
         listener = cluster.getListenerAddresses().get(0);
         client = ClientFactory.createClient();
         client.createConnection(listener);

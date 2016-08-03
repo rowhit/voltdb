@@ -257,10 +257,10 @@ public class VoltDB {
         public boolean m_isPaused = false;
         public boolean ignoreCrashForInitialize = false;
 
-        private final static void referToDocAndExit() {
+        private final static void referToDocAndExit(Configuration config) {
             System.out.println("Please refer to VoltDB documentation for command line usage.");
             System.out.flush();
-            System.exit(-1);
+            exit(config, -1);
         }
 
         public Configuration() {
@@ -339,7 +339,7 @@ public class VoltDB {
                     // VoltDB to offer help that isn't possibly quite wrong.
                     // You can probably get here using the legacy voltdb3 script. The usage
                     // is now a comment in that file.
-                    referToDocAndExit();
+                    referToDocAndExit(this);
                 }
 
                 if (arg.equals("noloadlib")) {
@@ -598,18 +598,18 @@ public class VoltDB {
                     }
                     if (!m_voltdbRoot.exists() && !m_voltdbRoot.mkdirs()) {
                         System.err.println("FATAL: Could not create directory \"" + m_voltdbRoot.getPath() + "\"");
-                        referToDocAndExit();
+                        referToDocAndExit(this);
                     }
                     try {
                         CatalogUtil.validateDirectory(DBROOT, m_voltdbRoot);
                     } catch (RuntimeException e) {
                         System.err.println("FATAL: " + e.getMessage());
-                        referToDocAndExit();
+                        referToDocAndExit(this);
                     }
                 }
                 else {
                     System.err.println("FATAL: Unrecognized option to VoltDB: " + arg);
-                    referToDocAndExit();
+                    referToDocAndExit(this);
                 }
             }
 
@@ -625,7 +625,7 @@ public class VoltDB {
             // If no action is specified, issue an error.
             if (null == m_startAction) {
                 hostLog.fatal("You must specify a startup action, either init, start, create, recover, rejoin, collect, or compile.");
-                referToDocAndExit();
+                referToDocAndExit(this);
             }
 
 
@@ -652,7 +652,7 @@ public class VoltDB {
                     hostLog.fatal(m_voltdbRoot + " is already initialized"
                             + "\nUse the start command to start the initialized database or use init --force"
                             + " to overwrite existing files.");
-                    referToDocAndExit();
+                    referToDocAndExit(this);
                 }
             } else if (m_meshBrokers == null || m_meshBrokers.trim().isEmpty()) {
                 if (m_leader != null) {
@@ -690,17 +690,17 @@ public class VoltDB {
                     configCFH = deploymentFH.getCanonicalFile();
                 } catch (IOException e) {
                     hostLog.fatal("Could not resolve file location " + deploymentFH, e);
-                    referToDocAndExit();
+                    referToDocAndExit(this);
                 }
                 try {
                     optCFH = new VoltFile(m_pathToDeployment).getCanonicalFile();
                 } catch (IOException e) {
                     hostLog.fatal("Could not resolve file location " + optCFH, e);
-                    referToDocAndExit();
+                    referToDocAndExit(this);
                 }
                 if (!configCFH.equals(optCFH)) {
                     hostLog.fatal("In startup mode you may only specify " + deploymentFH + " for deployment, You specified: " + optCFH);
-                    referToDocAndExit();
+                    referToDocAndExit(this);
                 }
             } else {
                 m_pathToDeployment = deploymentFH.getPath();
@@ -708,7 +708,7 @@ public class VoltDB {
 
             if (!inzFH.exists() || !inzFH.isFile() || !inzFH.canRead()) {
                 hostLog.fatal("Specified directory is not a VoltDB initialized root");
-                referToDocAndExit();
+                referToDocAndExit(this);
             }
 
             String stagedName = null;
@@ -716,12 +716,12 @@ public class VoltDB {
                 stagedName = br.readLine();
             } catch (IOException e) {
                 hostLog.fatal("Unable to access initialization marker at " + inzFH, e);
-                referToDocAndExit();
+                referToDocAndExit(this);
             }
 
             if (m_clusterName != null && !m_clusterName.equals(stagedName)) {
                 hostLog.fatal("Cluster name " + m_clusterName + " does not match the name given at initialization " + stagedName);
-                referToDocAndExit();
+                referToDocAndExit(this);
             } else {
                 m_clusterName = stagedName;
             }
@@ -733,13 +733,13 @@ public class VoltDB {
                             m_meshBrokers = br.readLine();
                         } catch (IOException e) {
                             hostLog.fatal("Unable to read cluster name given at initialization from " + inzFH, e);
-                            referToDocAndExit();
+                            referToDocAndExit(this);
                         }
                     }
                 }
             } catch (IllegalArgumentException e) {
                 hostLog.fatal("Unable to validate mesh argument \"" + m_meshBrokers + "\"", e);
-                referToDocAndExit();
+                referToDocAndExit(this);
             }
         }
 
@@ -1273,7 +1273,7 @@ public class VoltDB {
     }
 
     public static void exit(Configuration config, int status) {
-        if (isThisATest() || config.ignoreCrashForInitialize) {
+        if (isThisATest() || config.ignoreCrashForInitialize || ignoreCrash) {
             throw new SimulatedExitException(status);
         }
         System.exit(status);

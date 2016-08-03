@@ -115,6 +115,7 @@ public class LocalCluster implements VoltServerConfig {
     }
 
     ArrayList<PipeToFile> m_pipes = null;
+    ArrayList<PipeToFile> m_initPipes = null;
     ArrayList<CommandLine> m_cmdLines = null;
     ServerThread m_localServer = null;
     ProcessBuilder m_procBuilder;
@@ -144,7 +145,9 @@ public class LocalCluster implements VoltServerConfig {
     // with the port numbers and command line parameter value specific to that
     // instance.
     private final CommandLine templateCmdLine = new CommandLine(StartAction.CREATE);
-    private boolean isNewCli = false;
+    private boolean isNewCli = true;
+    public boolean isNewCli() { return isNewCli; };
+
     private String m_prefix = null;
     private boolean m_isPaused = false;
 
@@ -274,6 +277,7 @@ public class LocalCluster implements VoltServerConfig {
         m_jarFileName = jarFileName;
         m_failureState = m_kfactor < 1 ? FailureState.ALL_RUNNING : failureState;
         m_pipes = new ArrayList<PipeToFile>();
+        m_initPipes = new ArrayList<PipeToFile>();
         m_cmdLines = new ArrayList<CommandLine>();
 
         // if the user wants valgrind and it makes sense, give it to 'em
@@ -319,12 +323,6 @@ public class LocalCluster implements VoltServerConfig {
 
         Thread shutdownThread = new Thread(new ShutDownHookThread());
         java.lang.Runtime.getRuntime().addShutdownHook(shutdownThread);
-        //Make this default on the branch....TODO: remove it later.
-        isNewCli = true;
-        // Create the base command line that each process can makeCopy and modify
-        if (Boolean.getBoolean("NEW_CLI") || m_additionalProcessEnv.containsKey("NEW_CLI")) {
-            isNewCli = true;
-        }
         String cmd = isNewCli ? "probe" : "create";
         this.templateCmdLine.
             addTestOptions(true).
@@ -555,7 +553,7 @@ public class LocalCluster implements VoltServerConfig {
         m_localServer.start();
     }
 
-    void initLocalServer(int hostId) throws IOException {
+    void initLocalServer(int hostId, boolean clearLocalDataDirectories) throws IOException {
         // Make the local Configuration object...
         CommandLine cmdln = (templateCmdLine.makeCopy());
         cmdln.startCommand(StartAction.INITIALIZE);
@@ -568,9 +566,8 @@ public class LocalCluster implements VoltServerConfig {
 
         //If we are initializing lets wait for it to finish.
         ServerThread th = new ServerThread(cmdln);
-        File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId));
-        cmdln.voltdbRoot(root);
-        VoltFile.recursivelyDelete(root);
+        File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId), clearLocalDataDirectories);
+        cmdln.voltdbRoot(root + "/voltdbroot");
 
         th.start();
         try {
@@ -692,7 +689,7 @@ public class LocalCluster implements VoltServerConfig {
             try {
                 //Init
                 if (isNewCli) {
-                    initLocalServer(oopStartIndex);
+                    initLocalServer(oopStartIndex, clearLocalDataDirectories);
                 }
                 startLocalServer(oopStartIndex, clearLocalDataDirectories);
             } catch (IOException ioe) {
@@ -705,7 +702,7 @@ public class LocalCluster implements VoltServerConfig {
         for (int i = oopStartIndex; i < m_hostCount; i++) {
             try {
                 if (isNewCli) {
-                    initOne(i);
+                    initOne(i, clearLocalDataDirectories);
                 }
                 startOne(i, clearLocalDataDirectories, role, StartAction.CREATE);
             } catch (IOException ioe) {
@@ -714,7 +711,8 @@ public class LocalCluster implements VoltServerConfig {
         }
 
         printTiming(logtime, "Pre-witness: " + (System.currentTimeMillis() - startTime) + "ms");
-        boolean allReady = waitForAllReady();
+        boolean allReady = false;
+        allReady = waitForAllReady();
         printTiming(logtime, "Post-witness: " + (System.currentTimeMillis() - startTime) + "ms");
 
         // verify all processes started up and count failures
@@ -795,7 +793,7 @@ public class LocalCluster implements VoltServerConfig {
         }
     }
 
-    private void initOne(int hostId) throws IOException {
+    private void initOne(int hostId, boolean clearLocalDataDirectories) throws IOException {
         PipeToFile ptf = null;
         CommandLine cmdln = (templateCmdLine.makeCopy());
         cmdln.setJavaProperty(clusterHostIdProperty, String.valueOf(hostId));
@@ -816,11 +814,14 @@ public class LocalCluster implements VoltServerConfig {
                 cmdln.m_ipcPort = proc.port();
             }
             //If clear clean VoltFile.getServerSpecificRoot(String.valueOf(hostId))
-            File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId));
-            VoltFile.recursivelyDelete(root);
+            File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId), clearLocalDataDirectories);
             cmdln = cmdln.voltdbRoot(root);
             cmdln = cmdln.startCommand(StartAction.INITIALIZE);
-
+            if (clearLocalDataDirectories) {
+                cmdln.setForceVoltdbCreate(true);
+            } else {
+                cmdln.setForceVoltdbCreate(false);
+            }
             if ((m_versionOverrides != null) && (m_versionOverrides.length > hostId)) {
                 assert(m_versionOverrides[hostId] != null);
                 assert(m_versionCheckRegexOverrides[hostId] != null);
@@ -887,6 +888,7 @@ public class LocalCluster implements VoltServerConfig {
                     String.valueOf(hostId),
                     false,
                     proc);
+            m_initPipes.add(ptf);
             ptf.setName("ClusterPipe:" + String.valueOf(hostId));
             ptf.start();
         }
@@ -896,6 +898,12 @@ public class LocalCluster implements VoltServerConfig {
         }
 
         waitOnPTFReady(ptf, true, System.currentTimeMillis(), System.currentTimeMillis(), hostId);
+        //init is supposed to finish quickly.
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException ex) {
+            ;
+        }
         String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
         m_hostRoots.put(hostIdStr, cmdln.voltdbRoot().getPath());
     }

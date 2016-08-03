@@ -112,11 +112,16 @@ public class VoltFile extends File {
         return tempFile;
     }
 
-    public static File getServerSpecificRoot(String hostId) throws IOException {
+    public static File getServerSpecificRoot(String hostId, boolean clearLocalDataDirectories) throws IOException {
         ensureUserRootExists();
         File tempUserDir = new File(m_root, hostId);
-        if (!tempUserDir.mkdir()) {
-            throw new IOException();
+        if (!tempUserDir.isDirectory()) {
+            if (!tempUserDir.mkdir()) {
+                throw new IOException();
+            }
+        }
+        if (clearLocalDataDirectories) {
+            recursivelyDelete(tempUserDir);
         }
         return tempUserDir;
     }
