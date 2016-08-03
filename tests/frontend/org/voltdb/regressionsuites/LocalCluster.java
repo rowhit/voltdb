@@ -891,18 +891,14 @@ public class LocalCluster implements VoltServerConfig {
             m_initPipes.add(ptf);
             ptf.setName("ClusterPipe:" + String.valueOf(hostId));
             ptf.start();
+            proc.waitFor();
         }
         catch (IOException ex) {
             log.error("Failed to start cluster process:" + ex.getMessage(), ex);
             assert (false);
-        }
-
-        waitOnPTFReady(ptf, true, System.currentTimeMillis(), System.currentTimeMillis(), hostId);
-        //init is supposed to finish quickly.
-        try {
-            Thread.sleep(2000);
         } catch (InterruptedException ex) {
-            ;
+            log.error("Failed to start cluster process:" + ex.getMessage(), ex);
+            assert (false);
         }
         String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
         m_hostRoots.put(hostIdStr, cmdln.voltdbRoot().getPath());
