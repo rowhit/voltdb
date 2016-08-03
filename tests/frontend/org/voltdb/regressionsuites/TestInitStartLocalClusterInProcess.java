@@ -39,7 +39,7 @@ import org.voltdb.benchmark.tpcc.TPCCProjectBuilder;
  * multi-site VoltDB instances.
  *
  */
-public class TestInitStartLocalCluster extends RegressionSuite {
+public class TestInitStartLocalClusterInProcess extends RegressionSuite {
 
     static final int SITES_PER_HOST = 8;
     static final int HOSTS = 3;
@@ -53,7 +53,7 @@ public class TestInitStartLocalCluster extends RegressionSuite {
      * Constructor needed for JUnit. Should just pass on parameters to superclass.
      * @param name The name of the method to test. This is just passed to the superclass.
      */
-    public TestInitStartLocalCluster(String name) {
+    public TestInitStartLocalClusterInProcess(String name) {
         super(name);
     }
 
@@ -75,11 +75,10 @@ public class TestInitStartLocalCluster extends RegressionSuite {
 
     static public Test suite() throws Exception {
         // the suite made here will all be using the tests from this class
-        MultiConfigSuiteBuilder builder = new MultiConfigSuiteBuilder(TestInitStartLocalCluster.class);
+        MultiConfigSuiteBuilder builder = new MultiConfigSuiteBuilder(TestInitStartLocalClusterInProcess.class);
 
         // get a server config for the native backend with one sites/partitions
         VoltServerConfig config = new LocalCluster("catalogupdate-cluster-base.jar", SITES_PER_HOST, HOSTS, K, BackendTarget.NATIVE_EE_JNI);
-        ((LocalCluster)config).setHasLocalServer(false);
         // build up a project builder for the workload
         TPCCProjectBuilder project = new TPCCProjectBuilder();
         project.addDefaultSchema();

@@ -547,13 +547,15 @@ public class LocalCluster implements VoltServerConfig {
             cmdln.m_hostCount = m_hostCount;
             String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
             String root = m_hostRoots.get(hostIdStr);
+            //For new CLI dont pass deployment for probe.
+            cmdln.pathToDeployment(null);
             cmdln.voltdbRoot(root);
         }
         m_localServer = new ServerThread(cmdln);
         m_localServer.start();
     }
 
-    void initLocalServer(int hostId, boolean clearLocalDataDirectories) throws IOException {
+    void initLocalServer(int hostId) throws IOException {
         // Make the local Configuration object...
         CommandLine cmdln = (templateCmdLine.makeCopy());
         cmdln.startCommand(StartAction.INITIALIZE);
@@ -690,7 +692,7 @@ public class LocalCluster implements VoltServerConfig {
             try {
                 //Init
                 if (isNewCli) {
-                    initLocalServer(oopStartIndex, clearLocalDataDirectories);
+                    initLocalServer(oopStartIndex);
                 }
                 startLocalServer(oopStartIndex, clearLocalDataDirectories);
             } catch (IOException ioe) {
@@ -703,7 +705,7 @@ public class LocalCluster implements VoltServerConfig {
         for (int i = oopStartIndex; i < m_hostCount; i++) {
             try {
                 if (isNewCli) {
-                    initOne(i, clearLocalDataDirectories);
+                    initOne(i);
                 }
                 startOne(i, clearLocalDataDirectories, role, StartAction.CREATE);
             } catch (IOException ioe) {
@@ -793,8 +795,7 @@ public class LocalCluster implements VoltServerConfig {
         }
     }
 
-    private void initOne(int hostId, boolean clearLocalDataDirectories)
-    throws IOException {
+    private void initOne(int hostId) throws IOException {
         PipeToFile ptf = null;
         CommandLine cmdln = (templateCmdLine.makeCopy());
         cmdln.setJavaProperty(clusterHostIdProperty, String.valueOf(hostId));
@@ -909,7 +910,9 @@ public class LocalCluster implements VoltServerConfig {
             cmdln.m_hostCount = m_hostCount;
             String hostIdStr = cmdln.getJavaProperty(clusterHostIdProperty);
             String root = m_hostRoots.get(hostIdStr);
+            //For new CLI dont pass deployment for probe.
             cmdln.voltdbRoot(root);
+            cmdln.pathToDeployment(null);
         }
 
         if (this.m_additionalProcessEnv != null) {
