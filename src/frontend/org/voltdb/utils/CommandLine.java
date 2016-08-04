@@ -756,7 +756,7 @@ public class CommandLine extends VoltDB.Configuration
             cmdline.add("paused");
         }
 
-        if (m_startAction != StartAction.INITIALIZE) {
+        if (m_startAction != StartAction.INITIALIZE && m_startAction == StartAction.PROBE) {
             cmdline.add("mesh"); cmdline.add(Joiner.on(',').skipNulls().join(m_coordinators));
         }
 
@@ -1032,7 +1032,6 @@ public class CommandLine extends VoltDB.Configuration
     boolean isNewCli() {
         return m_newCli;
     }
-
     public void setNewCli(boolean flag) { m_newCli = flag; };
 
 }

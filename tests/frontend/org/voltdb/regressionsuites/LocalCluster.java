@@ -147,6 +147,11 @@ public class LocalCluster implements VoltServerConfig {
     private final CommandLine templateCmdLine = new CommandLine(StartAction.CREATE);
     private boolean isNewCli = true;
     public boolean isNewCli() { return isNewCli; };
+    public void setNewCli(boolean flag) {
+        isNewCli = flag;
+        templateCmdLine.setNewCli(flag);
+        templateCmdLine.startCommand("create");
+    };
 
     private String m_prefix = null;
     private boolean m_isPaused = false;
@@ -267,6 +272,7 @@ public class LocalCluster implements VoltServerConfig {
         m_siteCount = siteCount;
         m_hostCount = hostCount;
         templateCmdLine.hostCount(hostCount);
+        templateCmdLine.setNewCli(isNewCli);
         if (kfactor > 0 && !MiscUtils.isPro()) {
             m_kfactor = 0;
         } else {
