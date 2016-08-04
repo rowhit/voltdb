@@ -17,6 +17,7 @@
 
 package org.voltdb;
 
+import org.voltdb.messaging.Dr2MultipartResponseMessage;
 import org.voltdb.messaging.Dr2MultipartTaskMessage;
 
 import java.util.concurrent.Future;
@@ -24,6 +25,8 @@ import java.util.concurrent.Future;
 public interface DRConsumerMpCoordinator {
 
     void deliver(Dr2MultipartTaskMessage message);
+
+    void deliver(Dr2MultipartResponseMessage message);
 
     void processClientResponse(int handle, ClientResponseImpl resp);
 

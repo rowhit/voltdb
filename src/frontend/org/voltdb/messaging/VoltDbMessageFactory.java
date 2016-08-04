@@ -48,6 +48,7 @@ public class VoltDbMessageFactory extends VoltMessageFactory
     final public static byte SNAPSHOT_CHECK_RESPONSE_ID = VOLTCORE_MESSAGE_ID_MAX + 22;
     final public static byte IV2_REPAIR_LOG_TRUNCATION = VOLTCORE_MESSAGE_ID_MAX + 23;
     final public static byte DR2_MULTIPART_TASK_ID = VOLTCORE_MESSAGE_ID_MAX + 24;
+    final public static byte DR2_MULTIPART_RESPONSE_ID = VOLTCORE_MESSAGE_ID_MAX + 25;
 
     /**
      * Overridden by subclasses to create message types unknown by voltcore
@@ -127,13 +128,14 @@ public class VoltDbMessageFactory extends VoltMessageFactory
         case SNAPSHOT_CHECK_RESPONSE_ID:
             message = new SnapshotCheckResponseMessage();
             break;
-<<<<<<< ec60465f32bf9bea758899e7965769d7d3dc6dec
         case IV2_REPAIR_LOG_TRUNCATION:
             message = new RepairLogTruncationMessage();
-=======
+            break;
         case DR2_MULTIPART_TASK_ID:
             message = new Dr2MultipartTaskMessage();
->>>>>>> ENG-10524: Coordinate @ApplyBinaryLogMPs globally
+            break;
+        case DR2_MULTIPART_RESPONSE_ID:
+            message = new Dr2MultipartResponseMessage();
             break;
         default:
             message = null;
