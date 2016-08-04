@@ -60,6 +60,12 @@ public interface VoltServerConfig {
     public void startUp(boolean clearDataDirectories);
 
     /**
+     * Start the instance of VoltDB and optionally clear the
+     * data directories first
+     */
+    public void startUp(boolean clearDataDirectories, boolean skipInit);
+
+    /**
      * Shutdown the instance of VoltDB.
      */
     public void shutDown() throws InterruptedException;

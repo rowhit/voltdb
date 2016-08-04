@@ -433,12 +433,17 @@ public class LocalCluster implements VoltServerConfig {
 
     @Override
     public void startUp() {
-        startUp(true);
+        startUp(true, false);
     }
 
     @Override
     public void startUp(boolean clearLocalDataDirectories) {
-        startUp(clearLocalDataDirectories, ReplicationRole.NONE);
+        startUp(clearLocalDataDirectories, ReplicationRole.NONE, false);
+    }
+
+    @Override
+    public void startUp(boolean clearLocalDataDirectories, boolean skipInit) {
+        startUp(clearLocalDataDirectories, ReplicationRole.NONE, skipInit);
     }
 
     public void setForceVoltdbCreate(boolean newVoltdb) {
@@ -640,7 +645,7 @@ public class LocalCluster implements VoltServerConfig {
         }
     }
 
-    public void startUp(boolean clearLocalDataDirectories, ReplicationRole role) {
+    public void startUp(boolean clearLocalDataDirectories, ReplicationRole role, boolean skipInit) {
         assert (!m_running);
         if (m_running) {
             return;
@@ -694,7 +699,7 @@ public class LocalCluster implements VoltServerConfig {
         if (m_hasLocalServer) {
             try {
                 //Init
-                if (isNewCli) {
+                if (isNewCli && !skipInit) {
                     initLocalServer(oopStartIndex, clearLocalDataDirectories);
                 }
                 startLocalServer(oopStartIndex, clearLocalDataDirectories);
@@ -707,7 +712,7 @@ public class LocalCluster implements VoltServerConfig {
         // create all the out-of-process servers
         for (int i = oopStartIndex; i < m_hostCount; i++) {
             try {
-                if (isNewCli) {
+                if (isNewCli && !skipInit) {
                     initOne(i, clearLocalDataDirectories);
                 }
                 startOne(i, clearLocalDataDirectories, role, StartAction.CREATE);
@@ -1110,6 +1115,16 @@ public class LocalCluster implements VoltServerConfig {
                 portOffset,
                 rejoinHost,
                 liveRejoin ? StartAction.LIVE_REJOIN : StartAction.REJOIN);
+    }
+
+    public boolean restartOne(int hostId, Integer portOffset, String rejoinHost) {
+        return recoverOne(
+                false,
+                0,
+                hostId,
+                portOffset,
+                rejoinHost,
+                StartAction.PROBE);
     }
 
     public void joinOne(int hostId) {

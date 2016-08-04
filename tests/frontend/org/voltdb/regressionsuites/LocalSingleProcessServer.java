@@ -220,6 +220,11 @@ public abstract class LocalSingleProcessServer implements VoltServerConfig {
     }
 
     @Override
+    public void startUp(boolean clearLocalDataDirectories, boolean skipInit) {
+        startUp(clearLocalDataDirectories);
+    }
+
+    @Override
     public boolean isHSQL() {
         return m_target == BackendTarget.HSQLDB_BACKEND;
     }
