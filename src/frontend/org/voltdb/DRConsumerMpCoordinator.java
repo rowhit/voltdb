@@ -17,10 +17,9 @@
 
 package org.voltdb;
 
+import org.voltdb.client.ClientResponse;
 import org.voltdb.messaging.Dr2MultipartResponseMessage;
 import org.voltdb.messaging.Dr2MultipartTaskMessage;
-
-import java.util.concurrent.Future;
 
 public interface DRConsumerMpCoordinator {
 
@@ -28,12 +27,7 @@ public interface DRConsumerMpCoordinator {
 
     void deliver(Dr2MultipartResponseMessage message);
 
-    void processClientResponse(int handle, ClientResponseImpl resp);
+    void processClientResponse(int handle, ClientResponse response);
 
     void notifyOfPartitionLeaderPromotion(int partitionId);
-
-    Future<?> submitTask(ReceiverTask receiverTask);
-
-    static interface ReceiverTask extends Runnable {
-    }
 }
