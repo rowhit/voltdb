@@ -565,6 +565,9 @@ public class LocalCluster implements VoltServerConfig {
     }
 
     public String getServerSpecificRoot(String hostId) {
+        if (!m_hostRoots.containsKey(hostId)) {
+            throw new RuntimeException("getServerSpecificRoot possibly called before cluster has started.");
+        }
         return m_hostRoots.get(hostId) + "/voltdbroot";
     }
 

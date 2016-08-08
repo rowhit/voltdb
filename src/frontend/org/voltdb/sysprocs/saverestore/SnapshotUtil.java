@@ -1159,10 +1159,6 @@ public class SnapshotUtil {
         }
 
         StringBuilder filename_builder = new StringBuilder(fileNonce);
-        String testHostId = System.getProperty("__VOLTDB_CLUSTER_HOSTID__");
-        if (testHostId != null && testHostId.length() > 0) {
-            filename_builder.append(testHostId).append("-");
-        }
         filename_builder.append("-");
         filename_builder.append(table.getTypeName());
         if (!table.getIsreplicated())
