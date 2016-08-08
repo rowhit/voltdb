@@ -52,10 +52,11 @@ public class SpProcedureTask extends ProcedureTask
     }
 
     public SpProcedureTask(Mailbox initiator, String procName, TransactionTaskQueue queue,
+                  SPITransactionDoneNotification txnDoneNotification,
                   Iv2InitiateTaskMessage msg,
                   PartitionDRGateway drGateway)
     {
-       super(initiator, procName, new SpTransactionState(msg), queue);
+       super(initiator, procName, new SpTransactionState(msg), queue, txnDoneNotification);
        m_drGateway = drGateway;
     }
 

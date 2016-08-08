@@ -44,9 +44,9 @@ abstract public class ProcedureTask extends TransactionTask
     final String m_procName;
 
     ProcedureTask(Mailbox initiator, String procName, TransactionState txn,
-                  TransactionTaskQueue queue)
+                  TransactionTaskQueue queue, SPITransactionDoneNotification txnDoneNotification)
     {
-        super(txn, queue);
+        super(txn, queue, txnDoneNotification);
         m_initiator = initiator;
         m_procName = procName;
     }

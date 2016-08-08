@@ -56,6 +56,7 @@ public class FragmentTask extends TransactionTask
         this(mailbox,
              txnState,
              null,
+             null,
              message,
              null);
     }
@@ -64,10 +65,11 @@ public class FragmentTask extends TransactionTask
     FragmentTask(Mailbox mailbox,
                  ParticipantTransactionState txnState,
                  TransactionTaskQueue queue,
+                 SPITransactionDoneNotification txnDoneNotification,
                  FragmentTaskMessage message,
                  Map<Integer, List<VoltTable>> inputDeps)
     {
-        super(txnState, queue);
+        super(txnState, queue, txnDoneNotification);
         m_initiator = mailbox;
         m_fragmentMsg = message;
         m_inputDeps = inputDeps;

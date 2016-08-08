@@ -35,7 +35,7 @@ public class MPIEndOfLogTask extends TransactionTask
     MPIEndOfLogTask(Mailbox mailbox, TransactionTaskQueue queue,
                     MPIEndOfLogTransactionState txnState, List<Long> pInitiators)
     {
-        super(txnState, queue);
+        super(txnState, queue, null);
         m_initiatorHSIds = com.google_voltpatches.common.primitives.Longs.toArray(pInitiators);
         m_mailbox = mailbox;
     }

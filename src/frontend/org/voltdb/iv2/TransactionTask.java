@@ -32,11 +32,14 @@ public abstract class TransactionTask extends SiteTasker
     final protected TransactionState m_txnState;
     final protected TransactionTaskQueue m_queue;
     protected ListenableFuture<Object> m_durabilityBackpressureFuture = CoreUtils.COMPLETED_FUTURE;
+    final protected SPITransactionDoneNotification m_txnDoneNotification;
 
-    public TransactionTask(TransactionState txnState, TransactionTaskQueue queue)
+    public TransactionTask(TransactionState txnState, TransactionTaskQueue queue,
+                           SPITransactionDoneNotification txnDoneNotification)
     {
         m_txnState = txnState;
         m_queue = queue;
+        m_txnDoneNotification = txnDoneNotification;
     }
 
     public TransactionTask setDurabilityBackpressureFuture(ListenableFuture<Object> fut) {
@@ -86,6 +89,20 @@ public abstract class TransactionTask extends SiteTasker
     {
         // Mark the transaction state as DONE
         m_txnState.setDone();
+
+        // Set the truncation handle here instead of when processing the
+        // messages in the SpScheduler to avoid any races of transaction
+        // completing on the Site and receiving the messages in the Scheduler
+        // for MPs.
+        //
+        // We have to use the spHandle from the first fragment, not from the
+        // current message because it may be out of order if we do so. If we use
+        // the spHandle from the current completion message, it may be advancing
+        // the truncation handle before previous SPs are finished.
+        if (m_txnDoneNotification != null) {
+            m_txnDoneNotification.transactionDone(m_txnState.m_spHandle);
+        }
+
         // Flush us out of the head of the TransactionTaskQueue.  Null check so we're reusable
         // for live rejoin replay
         if (m_queue != null) {

@@ -35,10 +35,11 @@ public class CompleteTransactionTask extends TransactionTask
 
     public CompleteTransactionTask(TransactionState txnState,
                                    TransactionTaskQueue queue,
+                                   SPITransactionDoneNotification txnDoneNotification,
                                    CompleteTransactionMessage msg,
                                    PartitionDRGateway drGateway)
     {
-        super(txnState, queue);
+        super(txnState, queue, txnDoneNotification);
         m_completeMsg = msg;
         m_drGateway = drGateway;
     }
