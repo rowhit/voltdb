@@ -1290,12 +1290,8 @@ public class LocalCluster implements VoltServerConfig {
                     true, proc);
             synchronized (this) {
                 m_pipes.set(hostId, ptf);
-                if (m_cluster.contains(hostId)) {
-                    // replace the existing dead proc
-                    m_cluster.set(hostId, proc);
-                } else {
-                    m_cluster.add(proc);
-                }
+                // replace the existing dead proc
+                m_cluster.set(hostId, proc);
                 m_cmdLines.set(hostId, rejoinCmdLn);
             }
             Thread t = new Thread(ptf);
