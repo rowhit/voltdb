@@ -433,12 +433,13 @@ public class LocalCluster implements VoltServerConfig {
 
     @Override
     public void startUp() {
-        startUp(true, false);
+        startUp(true);
     }
 
     @Override
     public void startUp(boolean clearLocalDataDirectories) {
-        startUp(clearLocalDataDirectories, ReplicationRole.NONE, false);
+        //if cleardirectory is true we dont skip init.
+        startUp(clearLocalDataDirectories, ReplicationRole.NONE, (clearLocalDataDirectories ? false : true));
     }
 
     @Override
@@ -935,6 +936,8 @@ public class LocalCluster implements VoltServerConfig {
             //For new CLI dont pass deployment for probe.
             cmdln.voltdbRoot(root);
             cmdln.pathToDeployment(null);
+            //with probe there is no probe
+            cmdln.setForceVoltdbCreate(false);
         }
 
         if (this.m_additionalProcessEnv != null) {
@@ -1142,7 +1145,11 @@ public class LocalCluster implements VoltServerConfig {
 
     public void joinOne(int hostId) {
         try {
-            startOne(hostId, true, ReplicationRole.NONE, StartAction.JOIN);
+            if (isNewCli()) {
+                startOne(hostId, true, ReplicationRole.NONE, StartAction.PROBE);
+            } else {
+                startOne(hostId, true, ReplicationRole.NONE, StartAction.JOIN);
+            }
         } catch (IOException ioe) {
             throw new RuntimeException(ioe);
         }
@@ -1186,11 +1193,13 @@ public class LocalCluster implements VoltServerConfig {
         log.info("Rejoining " + hostId + " to hostID: " + rejoinHostId);
 
         // rebuild the EE proc set.
-        EEProcess eeProc = m_eeProcs.get(hostId);
-        try {
-            eeProc.waitForShutdown();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+        if (templateCmdLine.target().isIPC && m_eeProcs.contains(hostId)) {
+            EEProcess eeProc = m_eeProcs.get(hostId);
+            try {
+                eeProc.waitForShutdown();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
         if (templateCmdLine.target().isIPC) {
             String logfile = "LocalCluster_host_" + hostId + ".log";
@@ -1201,6 +1210,7 @@ public class LocalCluster implements VoltServerConfig {
         long start = 0;
         try {
             CommandLine rejoinCmdLn = m_cmdLines.get(hostId);
+            rejoinCmdLn.setForceVoltdbCreate(false);
             // some tests need this
             rejoinCmdLn.javaProperties = templateCmdLine.javaProperties;
             rejoinCmdLn.setJavaProperty(clusterHostIdProperty, String.valueOf(hostId));
@@ -1276,11 +1286,16 @@ public class LocalCluster implements VoltServerConfig {
                     "idx" + String.valueOf(perLocalClusterExtProcessIndex++) +
                     ".rejoined.txt",
                     proc.getInputStream(),
-                    PipeToFile.m_rejoinToken, true, proc);
+                    startAction == StartAction.JOIN ? PipeToFile.m_joinToken : PipeToFile.m_initToken,
+                    true, proc);
             synchronized (this) {
                 m_pipes.set(hostId, ptf);
-                // replace the existing dead proc
-                m_cluster.set(hostId, proc);
+                if (m_cluster.contains(hostId)) {
+                    // replace the existing dead proc
+                    m_cluster.set(hostId, proc);
+                } else {
+                    m_cluster.add(proc);
+                }
                 m_cmdLines.set(hostId, rejoinCmdLn);
             }
             Thread t = new Thread(ptf);
@@ -1291,7 +1306,7 @@ public class LocalCluster implements VoltServerConfig {
             log.error("Failed to start recovering cluster process:" + ex.getMessage(), ex);
             assert (false);
         }
-
+        m_running = true;
         return waitOnPTFReady(ptf, logtime, startTime, start, hostId);
     }
 
