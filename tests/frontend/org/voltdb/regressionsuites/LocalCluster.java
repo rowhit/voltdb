@@ -564,6 +564,10 @@ public class LocalCluster implements VoltServerConfig {
         m_localServer.start();
     }
 
+    public String getServerSpecificRoot(String hostId) {
+        return m_hostRoots.get(hostId) + "/voltdbroot";
+    }
+
     void initLocalServer(int hostId, boolean clearLocalDataDirectories) throws IOException {
         // Make the local Configuration object...
         CommandLine cmdln = (templateCmdLine.makeCopy());
@@ -978,6 +982,12 @@ public class LocalCluster implements VoltServerConfig {
                     cmdln.leader(":" + portNoToRejoin);
                     cmdln.enableAdd(true);
                 }
+                //If we are probe action pick leader.
+                if (startAction == StartAction.PROBE) {
+                    int portNoToRejoin = m_cmdLines.get(0).internalPort();
+                    cmdln.leader(":" + portNoToRejoin);
+                    cmdln.enableAdd(true);
+                }
             }
 
             // If local directories are being cleared
@@ -1108,23 +1118,23 @@ public class LocalCluster implements VoltServerConfig {
     }
 
     public boolean recoverOne(int hostId, Integer portOffset, String rejoinHost, boolean liveRejoin) {
-        return recoverOne(
-                false,
-                0,
-                hostId,
-                portOffset,
-                rejoinHost,
-                liveRejoin ? StartAction.LIVE_REJOIN : StartAction.REJOIN);
-    }
-
-    public boolean restartOne(int hostId, Integer portOffset, String rejoinHost) {
-        return recoverOne(
-                false,
-                0,
-                hostId,
-                portOffset,
-                rejoinHost,
-                StartAction.PROBE);
+        if (isNewCli) {
+            return recoverOne(
+                    false,
+                    0,
+                    hostId,
+                    portOffset,
+                    rejoinHost,
+                    StartAction.PROBE);
+        } else {
+            return recoverOne(
+                    false,
+                    0,
+                    hostId,
+                    portOffset,
+                    rejoinHost,
+                    liveRejoin ? StartAction.LIVE_REJOIN : StartAction.REJOIN);
+        }
     }
 
     public void joinOne(int hostId) {
@@ -1154,13 +1164,16 @@ public class LocalCluster implements VoltServerConfig {
         if (rejoinHostId == null || m_hasLocalServer) {
             rejoinHostId = 0;
         }
-
+        if (isNewCli) {
+            //If this is new CLI we use probe
+            startAction = StartAction.PROBE;
+        }
         int portNoToRejoin = m_cmdLines.get(rejoinHostId).internalPort();
 
         if (hostId == 0 && m_hasLocalServer) {
             templateCmdLine.leaderPort(portNoToRejoin);
             try {
-                startLocalServer(rejoinHostId, false, StartAction.REJOIN);
+                startLocalServer(rejoinHostId, false, startAction);
             } catch (IOException ioe) {
                 throw new RuntimeException(ioe);
             }

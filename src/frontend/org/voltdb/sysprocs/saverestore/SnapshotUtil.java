@@ -1152,12 +1152,17 @@ public class SnapshotUtil {
                                                          SnapshotFormat format,
                                                          int hostId)
     {
+
         String extension = ".vpt";
         if (format == SnapshotFormat.CSV) {
             extension = ".csv";
         }
 
         StringBuilder filename_builder = new StringBuilder(fileNonce);
+        String testHostId = System.getProperty("__VOLTDB_CLUSTER_HOSTID__");
+        if (testHostId != null && testHostId.length() > 0) {
+            filename_builder.append(testHostId).append("-");
+        }
         filename_builder.append("-");
         filename_builder.append(table.getTypeName());
         if (!table.getIsreplicated())

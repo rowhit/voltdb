@@ -93,7 +93,7 @@ public class TestCollector {
         assert (success);
         File voltDbRoot;
         if (cluster.isNewCli()) {
-            voltDbRoot = new File(VoltFile.getServerSpecificRoot(String.valueOf(0), true).getAbsoluteFile() + "/voltdbroot");
+            voltDbRoot = new File(cluster.getServerSpecificRoot("0"));
         } else {
             String voltDbFilePrefix = cluster.getSubRoots().get(0).getPath();
             voltDbRoot = new File(voltDbFilePrefix, builder.getPathToVoltRoot().getPath());
