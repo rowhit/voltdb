@@ -255,7 +255,6 @@ public class VoltDB {
         public String m_placementGroup = null;
 
         public boolean m_isPaused = false;
-        public boolean ignoreCrashForInitialize = false;
 
         private final static void referToDocAndExit(Configuration config) {
             System.out.println("Please refer to VoltDB documentation for command line usage.");
@@ -1015,9 +1014,6 @@ public class VoltDB {
         }
         if (VoltDB.isThisATest()) {
             VoltLogger log = new VoltLogger("HOST");
-            if (thrown != null) {
-                thrown.printStackTrace();
-            }
             log.warn("Declining to drop a crash file during a junit test.");
         }
         // end test code
@@ -1273,7 +1269,7 @@ public class VoltDB {
     }
 
     public static void exit(Configuration config, int status) {
-        if (isThisATest() || config.ignoreCrashForInitialize || ignoreCrash) {
+        if (isThisATest() || ignoreCrash) {
             throw new SimulatedExitException(status);
         }
         System.exit(status);

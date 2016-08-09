@@ -1152,7 +1152,6 @@ public class SnapshotUtil {
                                                          SnapshotFormat format,
                                                          int hostId)
     {
-
         String extension = ".vpt";
         if (format == SnapshotFormat.CSV) {
             extension = ".csv";

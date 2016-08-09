@@ -30,24 +30,20 @@ import org.voltdb.client.Client;
 import org.voltdb.utils.MiscUtils;
 
 import junit.framework.Test;
-import org.voltdb.benchmark.tpcc.TPCCProjectBuilder;
+import static junit.framework.TestCase.assertTrue;
+import org.voltdb.compiler.VoltProjectBuilder;
 
 
 /**
- * Tests a mix of multi-partition and single partition procedures on a
- * mix of replicated and partititioned tables on a mix of single-site and
- * multi-site VoltDB instances.
+ * Test LocalCluster with all out of process nodes.
  *
  */
 public class TestInitStartLocalClusterAllOutOfProcess extends RegressionSuite {
 
+    static LocalCluster m_config;
     static final int SITES_PER_HOST = 8;
     static final int HOSTS = 3;
     static final int K = MiscUtils.isPro() ? 1 : 0;
-    // procedures used by these tests
-    static Class<?>[] BASEPROCS = { org.voltdb.benchmark.tpcc.procedures.InsertNewOrder.class,
-                                    org.voltdb.benchmark.tpcc.procedures.SelectAll.class,
-                                    org.voltdb.benchmark.tpcc.procedures.delivery.class };
 
     /**
      * Constructor needed for JUnit. Should just pass on parameters to superclass.
@@ -77,18 +73,16 @@ public class TestInitStartLocalClusterAllOutOfProcess extends RegressionSuite {
         // the suite made here will all be using the tests from this class
         MultiConfigSuiteBuilder builder = new MultiConfigSuiteBuilder(TestInitStartLocalClusterAllOutOfProcess.class);
 
-        // get a server config for the native backend with one sites/partitions
-        VoltServerConfig config = new LocalCluster("catalogupdate-cluster-base.jar", SITES_PER_HOST, HOSTS, K, BackendTarget.NATIVE_EE_JNI);
-        ((LocalCluster )config).setHasLocalServer(false);
         // build up a project builder for the workload
-        TPCCProjectBuilder project = new TPCCProjectBuilder();
-        project.addDefaultSchema();
-        project.addDefaultPartitioning();
-        project.addProcedures(BASEPROCS);
+        VoltProjectBuilder project = new VoltProjectBuilder();
+        project.addLiteralSchema("");
+        // get a server config for the native backend with one sites/partitions
+        m_config = new LocalCluster("base-cluster.jar", SITES_PER_HOST, HOSTS, K, BackendTarget.NATIVE_EE_JNI);
+        ((LocalCluster )m_config).setHasLocalServer(false);
         // build the jarfile
-        boolean basecompile = config.compile(project);
+        boolean basecompile = m_config.compile(project);
         assertTrue(basecompile);
-        builder.addServerConfig(config);
+        builder.addServerConfig(m_config);
         return builder;
     }
 

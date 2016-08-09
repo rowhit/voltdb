@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import junit.framework.TestCase;
 
 import org.voltdb.BackendTarget;
-import org.voltdb.ReplicationRole;
 import org.voltdb.SQLStmt;
 import org.voltdb.TableHelper;
 import org.voltdb.VoltProcedure;
@@ -153,7 +152,7 @@ public class ScanPerfTest extends TestCase {
         System.out.println("Starting cluster.");
         cluster.setHasLocalServer(false);
         cluster.overrideAnyRequestForValgrind();
-        cluster.startUp(true, ReplicationRole.NONE, false);
+        cluster.startUp(true);
 
         System.out.println("Getting client connected.");
         ClientConfig clientConfig = new ClientConfig();

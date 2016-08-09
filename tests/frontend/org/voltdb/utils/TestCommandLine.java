@@ -23,7 +23,6 @@
 
 package org.voltdb.utils;
 
-import java.io.IOException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -31,7 +30,6 @@ import static org.junit.Assert.assertTrue;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
-import static org.junit.Assert.fail;
 
 import org.junit.Test;
 import org.voltdb.StartAction;
@@ -82,11 +80,7 @@ public class TestCommandLine
         cl.jmxPort(909);
         cl.jmxHost("notreal");
         CommandLine cl2 = null;
-        try {
-            cl2 = cl.makeCopy();
-        } catch (IOException ioe) {
-            fail(ioe.toString());
-        }
+        cl2 = cl.makeCopy();
         assertEquals(cl.toString(), cl2.toString());
     }
 

@@ -36,7 +36,6 @@ import org.voltdb.probe.MeshProber;
 
 import com.google_voltpatches.common.base.Joiner;
 import com.google_voltpatches.common.collect.ImmutableSortedSet;
-import java.io.IOException;
 import org.voltdb.common.Constants;
 
 
@@ -68,7 +67,7 @@ public class CommandLine extends VoltDB.Configuration
     }
 
     // Copy ctor.
-    public CommandLine makeCopy() throws IOException {
+    public CommandLine makeCopy() {
         CommandLine cl = new CommandLine(m_startAction);
         // first copy the base class fields
         cl.m_ipcPort = m_ipcPort;

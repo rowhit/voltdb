@@ -60,7 +60,7 @@ public class ServerThread extends Thread {
         m_config.m_noLoadLibVOLTDB = m_config.m_backend == BackendTarget.HSQLDB_BACKEND;
         m_config.m_forceVoltdbCreate = true;
         if (config.m_startAction == StartAction.INITIALIZE) {
-            m_config.ignoreCrashForInitialize = true;
+            VoltDB.ignoreCrash = true;
         }
         setName("ServerThread");
     }

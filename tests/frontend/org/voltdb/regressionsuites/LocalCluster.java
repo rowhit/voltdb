@@ -115,7 +115,6 @@ public class LocalCluster implements VoltServerConfig {
     }
 
     ArrayList<PipeToFile> m_pipes = null;
-    ArrayList<PipeToFile> m_initPipes = null;
     ArrayList<CommandLine> m_cmdLines = null;
     ServerThread m_localServer = null;
     ProcessBuilder m_procBuilder;
@@ -283,7 +282,6 @@ public class LocalCluster implements VoltServerConfig {
         m_jarFileName = jarFileName;
         m_failureState = m_kfactor < 1 ? FailureState.ALL_RUNNING : failureState;
         m_pipes = new ArrayList<PipeToFile>();
-        m_initPipes = new ArrayList<PipeToFile>();
         m_cmdLines = new ArrayList<CommandLine>();
 
         // if the user wants valgrind and it makes sense, give it to 'em
@@ -329,12 +327,11 @@ public class LocalCluster implements VoltServerConfig {
 
         Thread shutdownThread = new Thread(new ShutDownHookThread());
         java.lang.Runtime.getRuntime().addShutdownHook(shutdownThread);
-        String cmd = isNewCli ? "probe" : "create";
         this.templateCmdLine.
             addTestOptions(true).
             leader("").
             target(m_target).
-            startCommand(cmd).
+            startCommand(isNewCli ? "probe" : "create").
             jarFileName(VoltDB.Configuration.getPathToCatalogForTest(m_jarFileName)).
             buildDir(buildDir).
             classPath(classPath).
@@ -822,16 +819,6 @@ public class LocalCluster implements VoltServerConfig {
             }
         }
         try {
-            // add the ipc ports
-            if (m_target == BackendTarget.NATIVE_EE_IPC) {
-                // set 1 port for the EE process
-                cmdln.ipcPort(portGenerator.next());
-            }
-            if (m_target == BackendTarget.NATIVE_EE_VALGRIND_IPC) {
-                EEProcess proc = m_eeProcs.get(hostId);
-                assert(proc != null);
-                cmdln.m_ipcPort = proc.port();
-            }
             //If clear clean VoltFile.getServerSpecificRoot(String.valueOf(hostId))
             File root = VoltFile.getServerSpecificRoot(String.valueOf(hostId), clearLocalDataDirectories);
             cmdln = cmdln.voltdbRoot(root);
@@ -841,22 +828,6 @@ public class LocalCluster implements VoltServerConfig {
             } else {
                 cmdln.setForceVoltdbCreate(false);
             }
-            if ((m_versionOverrides != null) && (m_versionOverrides.length > hostId)) {
-                assert(m_versionOverrides[hostId] != null);
-                assert(m_versionCheckRegexOverrides[hostId] != null);
-                cmdln.m_versionStringOverrideForTest = m_versionOverrides[hostId];
-                cmdln.m_versionCompatibilityRegexOverrideForTest = m_versionCheckRegexOverrides[hostId];
-                if ((m_buildStringOverrides != null) && (m_buildStringOverrides.length > hostId)) {
-                    assert(m_buildStringOverrides[hostId] != null);
-                    cmdln.m_buildStringOverrideForTest = m_buildStringOverrides[hostId];
-                }
-            }
-
-            if ((m_modeOverrides != null) && (m_modeOverrides.length > hostId)) {
-                assert(m_modeOverrides[hostId] != null);
-                cmdln.m_modeOverrideForTest = m_modeOverrides[hostId];
-            }
-
             m_procBuilder.command().clear();
             List<String> cmdlnList = cmdln.createCommandLine();
             String cmdLineFull = "Init cmd host=" + String.valueOf(hostId) + " :";
@@ -865,7 +836,6 @@ public class LocalCluster implements VoltServerConfig {
                 cmdLineFull += " " + element;
             }
             log.info(cmdLineFull);
-            System.out.println(cmdLineFull);
             m_procBuilder.command().addAll(cmdlnList);
 
             // write output to obj/release/testoutput/<test name>-n.txt
@@ -907,7 +877,6 @@ public class LocalCluster implements VoltServerConfig {
                     String.valueOf(hostId),
                     false,
                     proc);
-            m_initPipes.add(ptf);
             ptf.setName("ClusterPipe:" + String.valueOf(hostId));
             ptf.start();
             proc.waitFor();
