@@ -57,16 +57,17 @@ public class SysprocFragmentTask extends TransactionTask
                         FragmentTaskMessage message,
                         ParticipantTransactionState txnState)
     {
-        this(mailbox, txnState, null, message, null);
+        this(mailbox, txnState, null, null, message, null);
     }
 
     SysprocFragmentTask(Mailbox mailbox,
                  ParticipantTransactionState txnState,
                  TransactionTaskQueue queue,
+                 SPITransactionDoneNotification txnDoneNotification,
                  FragmentTaskMessage message,
                  Map<Integer, List<VoltTable>> inputDeps)
     {
-        super(txnState, queue);
+        super(txnState, queue, txnDoneNotification);
         m_initiator = mailbox;
         m_fragmentMsg = message;
         m_inputDeps = inputDeps;

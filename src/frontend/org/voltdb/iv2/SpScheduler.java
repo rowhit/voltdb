@@ -66,7 +66,7 @@ import com.google_voltpatches.common.primitives.Longs;
 import com.google_voltpatches.common.util.concurrent.ListenableFuture;
 import com.google_voltpatches.common.util.concurrent.SettableFuture;
 
-public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
+public class SpScheduler extends Scheduler implements SnapshotCompletionInterest, SPITransactionDoneNotification
 {
     static final VoltLogger tmLog = new VoltLogger("TM");
 
@@ -570,7 +570,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         final boolean shortcutRead = msg.isReadOnly() && (m_defaultConsistencyReadLevel == ReadLevel.FAST);
         final String procedureName = msg.getStoredProcedureName();
         final SpProcedureTask task =
-            new SpProcedureTask(m_mailbox, procedureName, m_pendingTasks, msg, m_drGateway);
+            new SpProcedureTask(m_mailbox, procedureName, m_pendingTasks, this, msg, m_drGateway);
         if (!shortcutRead) {
             ListenableFuture<Object> durabilityBackpressureFuture =
                     m_cl.log(msg, msg.getSpHandle(), null, m_durabilityListener, task);
@@ -718,10 +718,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             int result = counter.offer(message);
             if (result == DuplicateCounter.DONE) {
                 m_duplicateCounters.remove(dcKey);
-                setRepairLogTruncationHandle(spHandle);
                 m_mailbox.send(counter.m_destinationId, counter.getLastResponse());
-
-                releaseBufferedReads();
             }
             else if (result == DuplicateCounter.MISMATCH) {
                 VoltDB.crashGlobalVoltDB("HASH MISMATCH: replicas produced different results.", true, null);
@@ -731,7 +728,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             // the initiatorHSId is the ClientInterface mailbox.
             // this will be on SPI without k-safety or replica only with k-safety
             assert(!message.isReadOnly());
-            setRepairLogTruncationHandle(spHandle);
             m_mailbox.send(message.getInitiatorHSId(), message);
         }
     }
@@ -762,14 +758,14 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (message.getFragmentTaskMessage().isSysProcTask()) {
             final SysprocFragmentTask task =
                 new SysprocFragmentTask(m_mailbox, (ParticipantTransactionState)txn,
-                                        m_pendingTasks, message.getFragmentTaskMessage(),
+                                        m_pendingTasks, this, message.getFragmentTaskMessage(),
                                         message.getInputDepMap());
             m_pendingTasks.offer(task);
         }
         else {
             final FragmentTask task =
                 new FragmentTask(m_mailbox, (ParticipantTransactionState)txn,
-                        m_pendingTasks, message.getFragmentTaskMessage(),
+                        m_pendingTasks, this, message.getFragmentTaskMessage(),
                         message.getInputDepMap());
             m_pendingTasks.offer(task);
         }
@@ -891,12 +887,12 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (msg.isSysProcTask()) {
             task =
                 new SysprocFragmentTask(m_mailbox, (ParticipantTransactionState)txn,
-                                        m_pendingTasks, msg, null);
+                                        m_pendingTasks, this, msg, null);
         }
         else {
             task =
                 new FragmentTask(m_mailbox, (ParticipantTransactionState)txn,
-                                 m_pendingTasks, msg, null);
+                                 m_pendingTasks, this, msg, null);
         }
         if (logThis) {
             ListenableFuture<Object> durabilityBackpressureFuture =
@@ -970,11 +966,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (counter != null) {
             int result = counter.offer(message);
             if (result == DuplicateCounter.DONE) {
-                final TransactionState txn = m_outstandingTxns.get(message.getTxnId());
-                if (txn != null && txn.isDone()) {
-                    setRepairLogTruncationHandle(message.getSpHandle());
-                }
-
                 m_duplicateCounters.remove(new DuplicateCounterKey(message.getTxnId(), message.getSpHandle()));
                 FragmentResponseMessage resp = (FragmentResponseMessage)counter.getLastResponse();
                 // MPI is tracking deps per partition HSID.  We need to make
@@ -998,11 +989,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                      if (m_defaultConsistencyReadLevel == ReadLevel.SAFE) {
                          m_bufferedReadLog.offer(m_mailbox, message, m_repairLogTruncationHandle);
                          return;
-                     }
-                 } else {
-                     // writes may update the truncation handle
-                     if (message.getSpHandle() > m_repairLogTruncationHandle) {
-                         setRepairLogTruncationHandle(message.getSpHandle());
                      }
                  }
              }
@@ -1035,33 +1021,11 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         {
             Iv2Trace.logCompleteTransactionMessage(msg, m_mailbox.getHSId());
             final CompleteTransactionTask task =
-                new CompleteTransactionTask(txn, m_pendingTasks, msg, m_drGateway);
+                new CompleteTransactionTask(txn, m_pendingTasks, this, msg, m_drGateway);
             queueOrOfferMPTask(task);
             // If this is a restart, then we need to leave the transaction state around
             if (!msg.isRestart()) {
                 m_outstandingTxns.remove(msg.getTxnId());
-                // Set the truncation handle here instead of when processing
-                // FragmentResponseMessage to avoid letting replicas think a
-                // fragment is done before the MP txn is fully committed.
-                //
-                // We have to use the spHandle from the fragment, not from the
-                // current CompleteTransactionMessage because it hasn't been
-                // executed yet. If we use the spHandle from the current
-                // completion message, it may be advancing the truncation handle
-                // before previous SPs are finished. This could happen when the
-                // MP we are completing is either a one-shot read MP or it
-                // didn't send any fragment to this partition.
-                //
-                // It is also possible to receive a CompleteTransactionMessage
-                // before the fragment runs, e.g. an early abort could happen if
-                // another partition failed its fragment before this partition
-                // even starts running the fragment. In this case, we don't want
-                // to update the truncation handle until after we run the
-                // fragment. Checking the doneness of the transaction state
-                // achieves this.
-                if (m_isLeader && txn.isDone() && !txn.isReadOnly()) {
-                    setRepairLogTruncationHandle(txn.m_spHandle);
-                }
             }
         }
     }
@@ -1248,18 +1212,14 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         return m_repairLogTruncationHandle;
     }
 
-    private void setRepairLogTruncationHandle(long newHandle)
+    @Override
+    public void transactionDone(long newHandle)
     {
-        assert newHandle >= m_repairLogTruncationHandle : "new handle: " + newHandle + ", repairLog:" + m_repairLogTruncationHandle;
-        m_repairLogTruncationHandle = newHandle;
-        scheduleRepairLogTruncateMsg();
-
-        releaseBufferedReads();
-    }
-
-    private void releaseBufferedReads() {
-        if (m_defaultConsistencyReadLevel == ReadLevel.SAFE) {
+        synchronized (m_lock) {
+            assert newHandle >= m_repairLogTruncationHandle;
+            m_repairLogTruncationHandle = newHandle;
             m_bufferedReadLog.releaseBufferedReads(m_mailbox, m_repairLogTruncationHandle);
+            scheduleRepairLogTruncateMsg();
         }
     }
 

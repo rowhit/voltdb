@@ -46,7 +46,7 @@ public class EveryPartitionTask extends TransactionTask
     EveryPartitionTask(Mailbox mailbox, TransactionTaskQueue queue,
                   TransactionInfoBaseMessage msg, List<Long> pInitiators)
     {
-        super(new EveryPartTransactionState(msg), queue);
+        super(new EveryPartTransactionState(msg), queue, null);
         m_initiationMsg = msg;
         m_initiatorHSIds.addAll(pInitiators);
         m_mailbox = mailbox;
