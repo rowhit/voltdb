@@ -957,12 +957,6 @@ public class LocalCluster implements VoltServerConfig {
                     cmdln.leader(":" + portNoToRejoin);
                     cmdln.enableAdd(true);
                 }
-                //If we are probe action pick leader.
-                if (startAction == StartAction.PROBE) {
-                    int portNoToRejoin = m_cmdLines.get(0).internalPort();
-                    cmdln.leader(":" + portNoToRejoin);
-                    cmdln.enableAdd(true);
-                }
             }
 
             // If local directories are being cleared
@@ -1062,7 +1056,7 @@ public class LocalCluster implements VoltServerConfig {
             assert (false);
         }
 
-        if (startAction == StartAction.JOIN) {
+        if (startAction == StartAction.JOIN || startAction == StartAction.PROBE) {
             waitOnPTFReady(ptf, true, System.currentTimeMillis(), System.currentTimeMillis(), hostId);
         }
 

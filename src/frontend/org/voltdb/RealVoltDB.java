@@ -2361,6 +2361,14 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
             hostLog.warn("Failed to collect data about lcoal network interfaces", e);
         }
     }
+    boolean m_isBare = false;
+    @Override
+    public boolean isBare() {
+        return m_isBare;
+    }
+    void setBare(boolean flag) {
+        m_isBare = flag;
+    }
 
     /**
      * Start the voltcore HostMessenger. This joins the node
@@ -2372,6 +2380,7 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
     MeshProber.Determination buildClusterMesh(ReadDeploymentResults readDepl) {
         final boolean bareAtStartup  = m_config.m_forceVoltdbCreate
                 || managedPathsWithFiles(m_config, readDepl.deployment).isEmpty();
+        setBare(bareAtStartup);
 
         MeshProber criteria = MeshProber.builder()
                 .coordinators(m_config.m_coordinators)
