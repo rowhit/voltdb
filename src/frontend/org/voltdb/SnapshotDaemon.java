@@ -76,6 +76,7 @@ import com.google_voltpatches.common.util.concurrent.Callables;
 import com.google_voltpatches.common.util.concurrent.ListenableFuture;
 import com.google_voltpatches.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google_voltpatches.common.util.concurrent.MoreExecutors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.voltdb.sysprocs.saverestore.SnapshotPathType;
 
 /**
@@ -119,7 +120,7 @@ public class SnapshotDaemon implements SnapshotCompletionInterest {
     private DaemonInitiator m_initiator;
     private long m_nextCallbackHandle;
     private String m_truncationSnapshotPath;
-
+    private final AtomicBoolean m_BareProcessed = new AtomicBoolean(false);
     /*
      * Before doing truncation snapshot operations, wait a few seconds
      * to give a few nodes a chance to get into the same state WRT to truncation
@@ -614,7 +615,7 @@ public class SnapshotDaemon implements SnapshotCompletionInterest {
      */
     private void processTruncationRequestEvent(final WatchedEvent event) {
         if (event.getType() == EventType.NodeChildrenChanged) {
-            boolean isBare = VoltDB.instance().isBare();
+            boolean isBare = (!m_BareProcessed.getAndSet(true) && VoltDB.instance().isBare());
             loggingLog.info("Scheduling truncation request processing " + (isBare ? 0 : m_truncationGatheringPeriod) + " seconds from now");
             /*
              * Do it 10 seconds later because these requests tend to come in bunches
