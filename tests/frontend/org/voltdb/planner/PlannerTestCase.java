@@ -34,6 +34,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import junit.framework.TestCase;
+
 import org.apache.commons.lang3.StringUtils;
 import org.json_voltpatches.JSONException;
 import org.voltdb.catalog.Database;
@@ -44,8 +46,6 @@ import org.voltdb.plannodes.AbstractPlanNode;
 import org.voltdb.plannodes.OrderByPlanNode;
 import org.voltdb.types.PlanNodeType;
 import org.voltdb.types.SortDirectionType;
-
-import junit.framework.TestCase;
 
 public class PlannerTestCase extends TestCase {
 
@@ -378,6 +378,28 @@ public class PlannerTestCase extends TestCase {
      * that make the "#include" start in the middle of a line.
      */
     private static final String TESTFILE_TEMPLATE =
+        "/* This file is part of VoltDB.\n" +
+        " * Copyright (C) 2008-2016 VoltDB Inc.\n" +
+        " *\n" +
+        " * Permission is hereby granted, free of charge, to any person obtaining\n" +
+        " * a copy of this software and associated documentation files (the\n" +
+        " * \"Software\"), to deal in the Software without restriction, including\n" +
+        " * without limitation the rights to use, copy, modify, merge, publish,\n" +
+        " * distribute, sublicense, and/or sell copies of the Software, and to\n" +
+        " * permit persons to whom the Software is furnished to do so, subject to\n" +
+        " * the following conditions:\n" +
+        " *\n" +
+        " * The above copyright notice and this permission notice shall be\n" +
+        " * included in all copies or substantial portions of the Software.\n" +
+        " *\n" +
+        " * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\n" +
+        " * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\n" +
+        " * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.\n" +
+        " * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR\n" +
+        " * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,\n" +
+        " * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR\n" +
+        " * OTHER DEALINGS IN THE SOFTWARE.\n" +
+        " */\n" +
         "\n" +
         "/******************************************************************************************\n" +
         " *\n" +
